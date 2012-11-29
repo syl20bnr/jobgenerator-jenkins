@@ -29,6 +29,7 @@ import hudson.model.BuildListener;
 import hudson.model.ParameterValue;
 import hudson.model.Result;
 import hudson.model.TopLevelItem;
+import hudson.model.AbstractItem;
 import hudson.model.AbstractProject;
 import hudson.model.Cause;
 import hudson.model.ParametersAction;
@@ -124,6 +125,9 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
         }
 
         protected Result doRun(BuildListener listener) throws Exception {
+            if(!this.checkParameters(listener)){
+                return Result.FAILURE;
+            }
             JobGenerator job = getJobGenerator();
             List<ParametersAction> params = getBuild().getActions(
                                           hudson.model.ParametersAction.class);
@@ -246,6 +250,43 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                     node.detach();
                 }
             }
+        }
+
+        private boolean checkParameters(BuildListener listener) {
+            JobGenerator job = getJobGenerator();
+            List<ParametersAction> params = getBuild().getActions(
+                                          hudson.model.ParametersAction.class);
+            String expName = getExpandedJobName(job, params);
+            if(job.getGeneratedJobName().isEmpty()){
+                listener.error("Generated Project Name cannot be empty. " +
+                               "Please review the configuration of the " +
+                               "project.");
+                return false;
+            }
+            else if(job.getName().equals(expName)){
+                listener.error("Generated Project Name cannot be equal " +
+                               "to the Job Generator name. " +
+                               "Please review the configuration of the " +
+                               "project.");
+                return false;
+            }
+            else{
+                // check if the expanded name correspond to another job
+                // generator
+                TopLevelItem i = Jenkins.getInstance().getItem(expName);
+                if(i != null){
+                    if(JobGenerator.class.isInstance(i)){
+                        listener.error("Generated Project Name corresponds " +
+                                       "to a the Job Generator " +
+                                       i.getName() + 
+                                       ". Generation has been aborted to " +
+                                       "prevent any loss of data.");
+                return false;
+                    }
+                }
+            }
+
+            return true;
         }
 
         private void gatherAllDownstreamProjects(AbstractProject p,
