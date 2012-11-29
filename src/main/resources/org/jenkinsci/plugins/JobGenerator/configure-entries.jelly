@@ -27,8 +27,13 @@ THE SOFTWARE.
          xmlns:p="/lib/hudson/project" xmlns:d="jelly:define"
          xmlns:l="/lib/layout" xmlns:t="/lib/hudson"
          xmlns:f="/lib/form" xmlns:i="jelly:fmt">
-  <f:entry title="${%Generated Job Name}" field="generatedJobName">
-    <f:textbox />
-  </f:entry>
   <st:include page="${it.descriptor.defaultEntriesPage}" />
+  <f:section name="plugin-jobgenerator-GeneratedJobConfig" title="${%Specific Generated Job Configuration}">
+    <f:entry title="${%Generated Job Name}" field="generatedJobName">
+      <f:textbox />
+    </f:entry>
+    <f:entry title="${%Generated Job Display Name}" field="generatedDisplayJobName">
+      <f:textbox />
+    </f:entry>
+  </f:section>
 </j:jelly>
