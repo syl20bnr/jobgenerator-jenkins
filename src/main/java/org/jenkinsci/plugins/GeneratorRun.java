@@ -92,6 +92,10 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                 while (s.contains(decorated)) {
                     s = s.replace(decorated, ((StringParameterValue) v).value);
                 }
+                decorated = "${ENV,var=\"" + v.getName() + "\"}";
+                while (s.contains(decorated)) {
+                    s = s.replace(decorated, ((StringParameterValue) v).value);
+                }
             }
         }
         return s;
