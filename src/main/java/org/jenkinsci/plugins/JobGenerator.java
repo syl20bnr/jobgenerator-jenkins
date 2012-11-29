@@ -147,12 +147,10 @@ public class JobGenerator extends Project<JobGenerator, GeneratorRun>
         JSONObject o = json.getJSONObject(
                                      "plugin-jobgenerator-GeneratedJobConfig");
         if(o != null) {
-            Set<String> keys = new HashSet<String>();
-            keys.add("generatedJobName");
-            keys.add("generatedDisplayJobName");
-            for(String k: keys){
-                if(o.has(k)){ this.generatedJobName = o.getString(k); }
-            }
+            String k = "generatedJobName";
+            if(o.has(k)){ this.generatedJobName = o.getString(k); }
+            k = "generatedDisplayJobName";
+            if(o.has(k)){ this.generatedDisplayJobName = o.getString(k); }
         }
     }
 
