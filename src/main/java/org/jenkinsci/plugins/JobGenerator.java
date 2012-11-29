@@ -25,16 +25,21 @@ THE SOFTWARE.
 package org.jenkinsci.plugins;
 
 import hudson.Extension;
+import hudson.Launcher;
 import hudson.model.*;
 import hudson.model.Descriptor.FormException;
 import hudson.model.ParametersDefinitionProperty;
 import hudson.model.Queue.FlyweightTask;
+import hudson.model.labels.LabelAtom;
 import hudson.scm.PollingResult;
+import hudson.scm.NullSCM;
+import hudson.scm.SCM;
 import hudson.triggers.SCMTrigger.SCMTriggerCause;
 import hudson.triggers.TimerTrigger.TimerTriggerCause;
 import hudson.util.AlternativeUiTextProvider;
 import hudson.util.FormValidation;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.HashSet;
 import java.util.List;
@@ -118,6 +123,23 @@ public class JobGenerator extends Project<JobGenerator, GeneratorRun>
             }
         }
         return res;
+    }
+
+    @Override
+    public Label getAssignedLabel() { 
+        return new LabelAtom("master");
+    }
+
+    @Override
+    public String getAssignedLabelString() {
+        return "master";
+    }
+
+    @Override
+    public boolean checkout(AbstractBuild build, Launcher launcher,
+            BuildListener listener, File changelogFile) throws IOException,
+            InterruptedException {
+        return true;
     }
 
     @Override
