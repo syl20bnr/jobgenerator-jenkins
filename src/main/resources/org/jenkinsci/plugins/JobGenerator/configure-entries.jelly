@@ -28,7 +28,7 @@ THE SOFTWARE.
          xmlns:l="/lib/layout" xmlns:t="/lib/hudson"
          xmlns:f="/lib/form" xmlns:i="jelly:fmt">
   <st:include page="${it.descriptor.defaultEntriesPage}" />
-  <f:section name="plugin-jobgenerator-GeneratedJobConfig" title="${%Specific Generated Job Configuration}">
+  <f:section name="plugin-jobgenerator-GeneratedJobConfig" title="${%Generated Job Additional Configuration}">
     <f:entry title="${%Generated Job Name}" field="generatedJobName">
       <f:textbox />
     </f:entry>
