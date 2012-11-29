@@ -93,10 +93,6 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                 while (s.contains(decorated)) {
                     s = s.replace(decorated, ((StringParameterValue) v).value);
                 }
-                decorated = "${ENV,var=\"" + v.getName() + "\"}";
-                while (s.contains(decorated)) {
-                    s = s.replace(decorated, ((StringParameterValue) v).value);
-                }
             }
         }
         return s;
@@ -187,7 +183,7 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                 this.removeNodeIfEmpty(doc, "parameterDefinitions");
                 this.removeNodeIfEmpty(doc,
                                   "hudson.model.ParametersDefinitionProperty");
-                this.removeNodeIfEmpty(doc, "properties");
+//                this.removeNodeIfEmpty(doc, "properties");
                 this.removeNodeIfEmpty(doc, "generatedJobName");
                 this.removeNodeIfEmpty(doc, "generatedDisplayJobName");
                 // Expand Vars
