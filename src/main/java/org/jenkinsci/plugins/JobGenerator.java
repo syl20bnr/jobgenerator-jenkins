@@ -29,6 +29,9 @@ import hudson.model.*;
 import hudson.model.Descriptor.FormException;
 import hudson.model.ParametersDefinitionProperty;
 import hudson.model.Queue.FlyweightTask;
+import hudson.scm.PollingResult;
+import hudson.triggers.SCMTrigger.SCMTriggerCause;
+import hudson.triggers.TimerTrigger.TimerTriggerCause;
 import hudson.util.AlternativeUiTextProvider;
 import hudson.util.FormValidation;
 
@@ -56,7 +59,7 @@ import org.jenkinsci.plugins.GeneratorRun;
  * @author <a href="mailto:sylvain.benner@gmail.com">Sylvain Benner</a>
  */
 public class JobGenerator extends Project<JobGenerator, GeneratorRun>
-                          implements TopLevelItem, FlyweightTask {
+                          implements TopLevelItem, FlyweightTask, SCMedItem {
 
     private transient boolean overwrite = false;
     private transient boolean delete = false;
@@ -118,15 +121,38 @@ public class JobGenerator extends Project<JobGenerator, GeneratorRun>
     }
 
     @Override
+    public boolean schedulePolling() {
+        return false;
+    }
+
+    @Override
+    public PollingResult poll(TaskListener listener) {
+        return PollingResult.NO_CHANGES;
+    }
+
+    @Override
+    public boolean scheduleBuild(int quietPeriod, Cause c, Action... actions) {
+        if(!SCMTriggerCause.class.isInstance(c) &&
+           !TimerTriggerCause.class.isInstance(c)){
+            return super.scheduleBuild(quietPeriod, c, actions);
+        }
+        return false;
+    }
+
+    @Override
     protected void submit(StaplerRequest req, StaplerResponse rsp) 
             throws IOException, ServletException, FormException {
         super.submit(req, rsp);
         JSONObject json = req.getSubmittedForm();
-        Set<String> keys = new HashSet<String>();
-        keys.add("generatedJobName");
-        keys.add("generatedDisplayJobName");
-        for(String k: keys){
-            if(json.has(k)){ this.generatedJobName = json.getString(k); }
+        JSONObject o = json.getJSONObject(
+                                     "plugin-jobgenerator-GeneratedJobConfig");
+        if(o != null) {
+            Set<String> keys = new HashSet<String>();
+            keys.add("generatedJobName");
+            keys.add("generatedDisplayJobName");
+            for(String k: keys){
+                if(o.has(k)){ this.generatedJobName = o.getString(k); }
+            }
         }
     }
 
