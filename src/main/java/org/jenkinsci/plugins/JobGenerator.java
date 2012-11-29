@@ -131,11 +131,6 @@ public class JobGenerator extends Project<JobGenerator, GeneratorRun>
     }
 
     @Override
-    public String getAssignedLabelString() {
-        return "master";
-    }
-
-    @Override
     public boolean checkout(AbstractBuild build, Launcher launcher,
             BuildListener listener, File changelogFile) throws IOException,
             InterruptedException {
