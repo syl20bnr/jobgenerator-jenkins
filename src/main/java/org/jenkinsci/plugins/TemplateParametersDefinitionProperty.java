@@ -95,6 +95,7 @@ public class TemplateParametersDefinitionProperty
                          throws IOException, ServletException {
         if(req.getMethod().equals("POST")) {
             JSONObject json = req.getSubmittedForm();
+//            System.out.println(json);
             JSONArray a = JSONArray.fromObject(json.get("parameter"));
             for (Object o : a) {
                 JSONObject jo = (JSONObject) o;

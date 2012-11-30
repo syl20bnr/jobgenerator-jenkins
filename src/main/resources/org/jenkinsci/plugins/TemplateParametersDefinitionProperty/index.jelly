@@ -47,8 +47,8 @@ THE SOFTWARE.
       <f:form method="post" action="build${empty(delay)?'':'?delay='+delay}" name="parameters"
               tableClass="parameters">
         <f:section title="${%Generation Mode}">
-          <f:radioBlock name="generation_mode" value="auto_update" title="${%Update previously generated jobs}" checked="true"/>
-          <f:radioBlock name="generation_mode" value="manual" title="${%Enter parameters value}" checked="false">
+          <f:radioBlock inline="true" name="generation_mode" value="auto_update" title="${%Update previously generated jobs}" checked="true"/>
+          <f:radioBlock inline="true" name="generation_mode" value="manual" title="${%Enter parameters value}" checked="false">
             <j:forEach var="parameterDefinition" items="${it.parameterDefinitions}">
               <f:block>
                 <table height="10" />

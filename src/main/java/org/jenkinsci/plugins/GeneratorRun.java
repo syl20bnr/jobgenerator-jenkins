@@ -24,6 +24,7 @@ THE SOFTWARE.
 
 package org.jenkinsci.plugins;
 
+import hudson.Util;
 import hudson.model.Build;
 import hudson.model.BuildListener;
 import hudson.model.ParameterValue;
@@ -311,17 +312,17 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
 
     class UpdateProjectReferencesVisitor extends VisitorSupport {
 
-        private final List<JobGenerator> upanddownstreamprojects;
+        private final List<JobGenerator> upordownstreamprojects;
         private final List<ParametersAction> params;
 
         public UpdateProjectReferencesVisitor(
                 List<AbstractProject> downstreamprojects,
                 List<ParametersAction> params){
-            this.upanddownstreamprojects = 
+            this.upordownstreamprojects = 
                                         new ArrayList<JobGenerator>();
             for(AbstractProject p: downstreamprojects){
                 if(JobGenerator.class.isInstance(p)){
-                    this.upanddownstreamprojects.add((JobGenerator)p);
+                    this.upordownstreamprojects.add((JobGenerator)p);
                 }
             }
             this.params = params;
@@ -331,13 +332,17 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
         public void visit(Text node){
             String expanded = "";
             for(String s: node.getText().split(",")){
-                for(JobGenerator p: this.upanddownstreamprojects){
-                   if(s.equals(p.getName())){
-                       if(!expanded.isEmpty()){
-                           expanded += ",";
+                s = Util.fixEmptyAndTrim(s);
+                if(s != null){
+                    for(JobGenerator p: this.upordownstreamprojects){
+                       if(s.equals(p.getName())){
+                           if(!expanded.isEmpty()){
+                               expanded += ",";
+                           }
+                           expanded += GeneratorRun.getExpandedJobName(p,
+                                                                       params);
                        }
-                       expanded += GeneratorRun.getExpandedJobName(p, params);
-                   }
+                    }
                 }
             }
             if(!expanded.isEmpty()){
