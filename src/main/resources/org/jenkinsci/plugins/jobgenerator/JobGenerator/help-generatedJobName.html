@@ -23,6 +23,9 @@ THE SOFTWARE.
 -->
 
 <div>
-  If checked existing jobs configurations are update. The job will fail if a
-  job already exist and this option is not checked.
+  The name of the generated job. It is required and it cannot be equal to this
+  job generator name.
+  It is possible to parameterized it. For instance, if a generator parameter
+  called <strong>BRANCH_NAME</strong> is defined, the generated job name can be:
+  <strong>${BRANCH_NAME}_MyJob</strong>.
 </div>

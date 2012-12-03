@@ -1,7 +1,7 @@
 /*
 The MIT License
 
-Copyright (c) 2012, Ubisoft Entertainment, Sylvain Benner.
+Copyright (c) 2012, Sylvain Benner.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -20,9 +20,9 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
-*/
+ */
 
-package org.jenkinsci.plugins;
+package org.jenkinsci.plugins.jobgenerator;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -46,39 +46,31 @@ import org.kohsuke.stapler.StaplerResponse;
 import hudson.model.*;
 
 /**
- * Keep only template parameters.
+ * Wrap Jenkins ParametersDefinitionProperty to be able to display its own
+ * view.
  * 
  * @author <a href="mailto:sylvain.benner@gmail.com">Sylvain Benner</a>
  */
 @ExportedBean(defaultVisibility=2)
-public class TemplateParametersDefinitionProperty
+public class GeneratorParametersDefinitionProperty
         extends ParametersDefinitionProperty 
         implements Action {
 
     private static final Logger LOGGER = Logger.getLogger(
-                         TemplateParametersDefinitionProperty.class.getName());
+                         GeneratorParametersDefinitionProperty.class.getName());
 
-    private transient List<ParameterDefinition> templateParameterDefinitions;
+    private transient List<ParameterDefinition> generatorParameterDefinitions;
 
-    public TemplateParametersDefinitionProperty(
-            ParametersDefinitionProperty property) {
-        this.templateParameterDefinitions = 
+    public GeneratorParametersDefinitionProperty(
+            ParametersDefinitionProperty property,
+            JobGenerator project) {
+        this.owner = project;
+        this.generatorParameterDefinitions = 
                                           new ArrayList<ParameterDefinition>();
         List<ParameterDefinition> lpd = property.getParameterDefinitions();
         for(ParameterDefinition pd: lpd){
-            if (TemplateKeyValueParameterDefinition.class.isInstance(pd)){
-                this.templateParameterDefinitions.add(pd);
-            }
-        }
-    }
-
-    public TemplateParametersDefinitionProperty(
-            List<ParameterDefinition> lpd) {
-        this.templateParameterDefinitions =
-                                          new ArrayList<ParameterDefinition>();
-        for(ParameterDefinition pd: lpd){
-            if (TemplateKeyValueParameterDefinition.class.isInstance(pd)){
-                this.templateParameterDefinitions.add(pd);
+            if (GeneratorKeyValueParameterDefinition.class.isInstance(pd)){
+                this.generatorParameterDefinitions.add(pd);
             }
         }
     }
@@ -95,16 +87,17 @@ public class TemplateParametersDefinitionProperty
                          throws IOException, ServletException {
         if(req.getMethod().equals("POST")) {
             JSONObject json = req.getSubmittedForm();
-//            System.out.println(json);
+            System.out.println(json);
             JSONArray a = JSONArray.fromObject(json.get("parameter"));
             for (Object o : a) {
                 JSONObject jo = (JSONObject) o;
                 String name = jo.getString("name");
                 if(this.getParameterDefinition(name) == null){
                     String value = jo.getString("value");
-                    TemplateKeyValueParameterDefinition pdef = 
-                      new TemplateKeyValueParameterDefinition(name, value, "");
-                    this.templateParameterDefinitions.add(pdef);
+                    GeneratorKeyValueParameterDefinition pdef = 
+                        new GeneratorKeyValueParameterDefinition(name,
+                                                                 value, "");
+                    this.generatorParameterDefinitions.add(pdef);
                 }
             }
             JobGenerator p = (JobGenerator)this.getOwner();
@@ -124,25 +117,25 @@ public class TemplateParametersDefinitionProperty
     @Exported
     @Override
     public List<ParameterDefinition> getParameterDefinitions() {
-        return this.templateParameterDefinitions;
+        return this.generatorParameterDefinitions;
     }
 
     @Override
     public List<String> getParameterDefinitionNames() {
         return new AbstractList<String>() {
             public String get(int index) {
-                return templateParameterDefinitions.get(index).getName();
+                return generatorParameterDefinitions.get(index).getName();
             }
 
             public int size() {
-                return (templateParameterDefinitions.size());
+                return (generatorParameterDefinitions.size());
             }
         };
     }
 
     @Override
     public ParameterDefinition getParameterDefinition(String name) {
-        for (ParameterDefinition pd : this.templateParameterDefinitions)
+        for (ParameterDefinition pd : this.generatorParameterDefinitions)
             if (pd.getName().equals(name))
                 return pd;
         return null;

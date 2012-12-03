@@ -1,7 +1,7 @@
 /*
 The MIT License
 
-Copyright (c) 2012, Ubisoft Entertainment, Sylvain Benner.
+Copyright (c) 2012, Sylvain Benner.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -22,38 +22,14 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-package org.jenkinsci.plugins;
+package org.jenkinsci.plugins.jobgenerator;
 
-import hudson.Extension;
-import hudson.model.*;
-import org.kohsuke.stapler.DataBoundConstructor;
+import hudson.Plugin;
 
 /**
- * Default Template Parameter which is a key value.
- * 
  * @author <a href="mailto:sylvain.benner@gmail.com">Sylvain Benner</a>
  */
-public class TemplateKeyValueParameterDefinition
-                                           extends StringParameterDefinition {
+public class JobGeneratorPlugin extends Plugin {
 
-    @DataBoundConstructor
-    public TemplateKeyValueParameterDefinition(String name,
-                                               String defaultValue,
-                                               String description) {
-        super(name, defaultValue, description);
-    }
-
-    @Extension
-    public static class DescriptorImpl extends ParameterDescriptor {
-        @Override
-        public String getDisplayName() {
-            return Messages.TemplateKeyValueParameterDefinition_DisplayName();
-        }
-
-        @Override
-        public String getHelpFile() {
-            return "/help/parameter/string.html";
-        }
-    }
 
 }

@@ -40,6 +40,14 @@
     </repository>
   </distributionManagement>
 
+  <dependencies>
+    <dependency>
+      <groupId>org.jenkins-ci.plugins</groupId>
+      <artifactId>parameterized-trigger</artifactId>
+      <version>2.16</version>
+    </dependency>
+  </dependencies>
+
   <build>
     <plugins>
       <plugin>

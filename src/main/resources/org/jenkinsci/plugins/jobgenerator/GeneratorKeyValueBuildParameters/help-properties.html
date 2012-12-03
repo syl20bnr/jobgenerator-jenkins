@@ -1,7 +1,7 @@
 <!--
 The MIT License
 
-Copyright (c) 2012, Ubisoft Entertainment, Sylvain Benner.
+Copyright (c) 2012, Sylvain Benner.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -22,18 +22,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 -->
 
-<?jelly escape-by-default='true'?>
-<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler"
-         xmlns:p="/lib/hudson/project" xmlns:d="jelly:define"
-         xmlns:l="/lib/layout" xmlns:t="/lib/hudson"
-         xmlns:f="/lib/form" xmlns:i="jelly:fmt">
-  <st:include page="${it.descriptor.defaultEntriesPage}" />
-  <f:section name="plugin-jobgenerator-GeneratedJobConfig" title="${%Generated Job Additional Configuration}">
-    <f:entry title="${%Generated Job Name}" field="generatedJobName">
-      <f:textbox />
-    </f:entry>
-    <f:entry title="${%Generated Job Display Name}" field="generatedDisplayJobName">
-      <f:textbox />
-    </f:entry>
-  </f:section>
-</j:jelly>
+<div>
+  KEY=value pairs, one per line (Java properties file format).
+  Backslashes are used for escaping, so use "\\" for a single backslash.
+  <p/>
+  Theses variables are removed from generated jobs configurations.
+</div>

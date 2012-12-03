@@ -1,7 +1,7 @@
-/*
+<!--
 The MIT License
 
-Copyright (c) 2012, Ubisoft Entertainment, Sylvain Benner.
+Copyright (c) 2012, Sylvain Benner.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -20,16 +20,16 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
-*/
+-->
 
-package org.jenkinsci.plugins;
-
-import hudson.Plugin;
-
-/**
- * @author <a href="mailto:sylvain.benner@gmail.com">Sylvain Benner</a>
- */
-public class JobGeneratorPlugin extends Plugin {
-
-
-}
+<?jelly escape-by-default='true'?>
+<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:d="jelly:define"
+	xmlns:l="/lib/layout" xmlns:t="/lib/hudson" xmlns:f="/lib/form"
+	xmlns:i="jelly:fmt" xmlns:p="/lib/hudson/project">
+	<f:entry title="${it.name}" description="${it.description}">
+		<div name="parameter" description="${it.description}">
+			<input type="hidden" name="name" value="${it.name}" />
+			<f:textbox name="value" value="${it.defaultValue}" />
+		</div>
+	</f:entry>
+</j:jelly>
