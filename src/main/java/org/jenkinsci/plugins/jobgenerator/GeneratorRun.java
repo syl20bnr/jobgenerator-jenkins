@@ -1,7 +1,7 @@
 /*
 The MIT License
 
-Copyright (c) 2012, Ubisoft Entertainment, Sylvain Benner.
+Copyright (c) 2012, Sylvain Benner.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -20,21 +20,27 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
-*/
+ */
 
-package org.jenkinsci.plugins;
+package org.jenkinsci.plugins.jobgenerator;
 
+import hudson.Util;
 import hudson.model.Build;
 import hudson.model.BuildListener;
 import hudson.model.ParameterValue;
 import hudson.model.Result;
 import hudson.model.TopLevelItem;
-import hudson.model.AbstractItem;
 import hudson.model.AbstractProject;
 import hudson.model.Cause;
 import hudson.model.ParametersAction;
 import hudson.model.Run;
 import hudson.model.StringParameterValue;
+import hudson.plugins.parameterizedtrigger.AbstractBuildParameters;
+import hudson.plugins.parameterizedtrigger.BuildTrigger;
+import hudson.plugins.parameterizedtrigger.BuildTriggerConfig;
+import hudson.plugins.parameterizedtrigger.CurrentBuildParameters;
+import hudson.tasks.BuildStep;
+import hudson.tasks.Builder;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
@@ -42,15 +48,22 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
+import java.text.MessageFormat;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.ListIterator;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Properties;
 import java.util.Set;
 import java.util.logging.Logger;
 
 import jenkins.model.Jenkins;
 
+import org.apache.tools.ant.filters.StringInputStream;
 import org.dom4j.Document;
 import org.dom4j.Element;
 import org.dom4j.Node;
@@ -61,8 +74,7 @@ import org.dom4j.io.SAXReader;
 
 /**
  * Generates a configured job by copying this job config.xml and replacing
- * template parameters by replacing then with values provided by the user at
- * build launch time.
+ * generator parameters with values provided by the user at build time.
  * 
  * @author <a href="mailto:sylvain.benner@gmail.com">Sylvain Benner</a>
  */
@@ -89,11 +101,17 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
         for (ParametersAction p : params) {
             List<ParameterValue> values = p.getParameters();
             for (ParameterValue v : values) {
-                String decorated = "${" + v.getName() + "}";
-                while (s.contains(decorated)) {
-                    s = s.replace(decorated, ((StringParameterValue) v).value);
-                }
+                s = GeneratorRun.expand(s, v.getName(), 
+                                  ((GeneratorKeyValueParameterValue) v).value);
             }
+        }
+        return s;
+    }
+
+    private static String expand(String s, String n, String v){
+        String decorated = "${" + n + "}";
+        while (s.contains(decorated)) {
+            s = s.replace(decorated, v);
         }
         return s;
     }
@@ -173,19 +191,6 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                         root.addElement("displayName").addText(expDispName);
                     }
                 }
-                // Remove info specific to Job Generator
-                List list = doc.selectNodes("//org.jenkinsci.plugins." + 
-                                        "TemplateKeyValueParameterDefinition");
-                for (Iterator iter = list.iterator(); iter.hasNext(); ) {
-                    Node node = (Node) iter.next();
-                    node.detach();
-                }
-                this.removeNodeIfEmpty(doc, "parameterDefinitions");
-                this.removeNodeIfEmpty(doc,
-                                  "hudson.model.ParametersDefinitionProperty");
-//                this.removeNodeIfEmpty(doc, "properties");
-                this.removeNodeIfEmpty(doc, "generatedJobName");
-                this.removeNodeIfEmpty(doc, "generatedDisplayJobName");
                 // Expand Vars
                 Visitor v = new ExpandVarsVisitor(params);
                 doc.accept(v);
@@ -195,6 +200,17 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                 v = new UpdateProjectReferencesVisitor(
                             job.getDownstreamProjects(), params);
                 doc.accept(v);
+                // Remove info specific to Job Generator
+                v = new GatherElementsToRemoveVisitor();
+                doc.accept(v);
+                for(Element e: ((GatherElementsToRemoveVisitor)v).toRemove){
+                    e.detach();
+                }
+                this.removeNodeIfNoChild(doc, "parameterDefinitions");
+                this.removeNodeIfNoChild(doc,
+                                  "hudson.model.ParametersDefinitionProperty");
+                this.removeNodeIfNoChild(doc, "generatedJobName");
+                this.removeNodeIfNoChild(doc, "generatedDisplayJobName");
                 // Create/Update Job
                 doc.normalize();
                 InputStream is = new ByteArrayInputStream(
@@ -211,34 +227,61 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
             return Result.SUCCESS;
         }
 
+        @Override
+        public void post2(BuildListener listener) throws Exception {
+        }
+
         /**
          * Execute all downstream projects and pass template parameters to them.
          * Only the initiator of the build can schedule the build of the
          * downstream project.
          */
         @Override
-        public void post2(BuildListener listener) throws Exception {
+        public void cleanUp(BuildListener listener) throws Exception {
             JobGenerator job = getJobGenerator();
-            Set<AbstractProject> sdp = new HashSet<AbstractProject>();
-            this.gatherAllDownstreamProjects(job, sdp);
-            List<ParametersAction> params = getBuild().getActions(
+            if(!job.getProcessAll()){
+                return;
+            }
+            List<ParametersAction> lpa = getBuild().getActions(
                                           hudson.model.ParametersAction.class);
-            if(job.isInitiator() && job.getProcessAll()){
-                for (AbstractProject p : sdp) {
+            BuildTrigger bt = job.getPublishersList().get(BuildTrigger.class);
+            if (bt != null) {
+                // parameterized build trigger
+                for (ListIterator<BuildTriggerConfig> btc =
+                        bt.getConfigs().listIterator(); btc.hasNext();) {
+                    BuildTriggerConfig c = btc.next();
+                    for (AbstractProject p : c.getProjectList(job.getParent(),
+                                                              null)) {
+                        List<ParametersAction> importParams =
+                                             new ArrayList<ParametersAction>();
+                        importParams.addAll(lpa);
+                        List<AbstractBuildParameters> lbp = c.getConfigs();
+                        for(AbstractBuildParameters bp: lbp){
+                            if(GeneratorKeyValueBuildParameters.class.
+                                                               isInstance(bp)){
+                                importParams.add((ParametersAction)
+                                    bp.getAction(GeneratorRun.this, listener));
+                            }
+                        }
+                        job.copyOptions((JobGenerator) p);
+                        Cause.UpstreamCause cause = new Cause.UpstreamCause(
+                                                                   getBuild());
+                        p.scheduleBuild2(0, cause, importParams);
+                    }
+                }
+            }
+            else{
+                // standard Jenkins dependencies
+                for(AbstractProject dp: job.getDownstreamProjects()){
                     Cause.UpstreamCause cause = new Cause.UpstreamCause(
                                                                    getBuild());
-                    job.copyOptions((JobGenerator) p);
-                    p.scheduleBuild2(1, cause, params);
+                    job.copyOptions((JobGenerator) dp);
+                    dp.scheduleBuild2(0, cause, lpa);
                 }
-                job.resetInitiator();
             }
         }
 
-        @Override
-        public void cleanUp(BuildListener listener) throws Exception {
-        }
-
-        private void removeNodeIfEmpty(Document doc, String elem) {
+        private void removeNodeIfNoChild(Document doc, String elem) {
             List list = doc.selectNodes("//" + elem);
             for (Iterator iter = list.iterator(); iter.hasNext(); ) {
                 Node node = (Node) iter.next();
@@ -284,15 +327,6 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
 
             return true;
         }
-
-        private void gatherAllDownstreamProjects(AbstractProject p,
-                                                 Set<AbstractProject> acc){
-            List<AbstractProject> ldp = p.getDownstreamProjects();
-            for(AbstractProject dp: ldp){
-                acc.add(dp);
-                this.gatherAllDownstreamProjects(dp, acc);
-            }
-        }
     }
 
     class ExpandVarsVisitor extends VisitorSupport {
@@ -302,7 +336,7 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
         public ExpandVarsVisitor(List<ParametersAction> params){
             this.params = params;
         }
-    
+
         @Override
         public void visit(Text node){
             node.setText(GeneratorRun.expand(node.getText(), this.params));
@@ -311,37 +345,95 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
 
     class UpdateProjectReferencesVisitor extends VisitorSupport {
 
-        private final List<JobGenerator> upanddownstreamprojects;
+        private final List<JobGenerator> upordownstreamprojects;
         private final List<ParametersAction> params;
+        private Set<Entry<Object, Object>> passedVariables = null;
 
         public UpdateProjectReferencesVisitor(
                 List<AbstractProject> downstreamprojects,
                 List<ParametersAction> params){
-            this.upanddownstreamprojects = 
+            this.upordownstreamprojects = 
                                         new ArrayList<JobGenerator>();
             for(AbstractProject p: downstreamprojects){
                 if(JobGenerator.class.isInstance(p)){
-                    this.upanddownstreamprojects.add((JobGenerator)p);
+                    this.upordownstreamprojects.add((JobGenerator)p);
                 }
             }
             this.params = params;
         }
-    
+
+        @Override
+        public void visit(Element node) {
+            String n = node.getName();
+            if(n.equals("properties") &&
+               node.getParent().getName().equals("org.jenkinsci.plugins." +
+                             "jobgenerator.GeneratorKeyValueBuildParameters")){
+                // harvest variables passed by the parameterized trigger plugin
+                String t = node.getTextTrim();
+                if(t.contains("=")){
+                    Properties p = new Properties();
+                    try {
+                        p.load(new StringInputStream(t));
+                    }
+                    catch (IOException e) {
+                        return;
+                    }
+                    this.passedVariables = p.entrySet();
+                }
+            }
+            else if(n.equals("triggerWithNoParameters")){
+                // force trigger without any parameter
+                node.setText("true");
+            }
+        }
+
         @Override
         public void visit(Text node){
             String expanded = "";
             for(String s: node.getText().split(",")){
-                for(JobGenerator p: this.upanddownstreamprojects){
-                   if(s.equals(p.getName())){
-                       if(!expanded.isEmpty()){
-                           expanded += ",";
+                s = Util.fixEmptyAndTrim(s);
+                if(s != null){
+                    for(JobGenerator p: this.upordownstreamprojects){
+                       if(s.equals(p.getName())){
+                           String jexp = GeneratorRun.getExpandedJobName(p,
+                                                                       params);
+                           if(this.passedVariables != null){
+                               // replace additional variables from the
+                               // parameterized trigger plugin
+                               for (Map.Entry<Object, Object> v :
+                                                        this.passedVariables) {
+                                   jexp = GeneratorRun.expand(jexp,
+                                                      v.getKey().toString(),
+                                                      v.getValue().toString());
+                               }
+                           }
+                           if(!expanded.isEmpty()){
+                               expanded += ",";
+                           }
+                           expanded += jexp;
                        }
-                       expanded += GeneratorRun.getExpandedJobName(p, params);
-                   }
+                    }
                 }
             }
             if(!expanded.isEmpty()){
                 node.setText(expanded);
+            }
+        }
+    }
+
+    class GatherElementsToRemoveVisitor extends VisitorSupport {
+
+        public List<Element> toRemove = new ArrayList<Element>();
+
+        public GatherElementsToRemoveVisitor(){
+        }
+
+        @Override
+        public void visit(Element node) {
+            String n = node.getName();
+            if(n.contains("GeneratorKeyValueParameterDefinition") ||
+               n.contains("GeneratorKeyValueBuildParameters")){
+                this.toRemove.add(node);
             }
         }
     }

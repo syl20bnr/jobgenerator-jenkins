@@ -1,7 +1,7 @@
 /*
 The MIT License
 
-Copyright (c) 2012, Ubisoft Entertainment, Sylvain Benner.
+Copyright (c) 2012, Sylvain Benner.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -22,12 +22,14 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-package org.jenkinsci.plugins;
+package org.jenkinsci.plugins.jobgenerator;
 
 import hudson.Extension;
 import hudson.Launcher;
 import hudson.model.*;
 import hudson.model.Descriptor.FormException;
+import hudson.model.ParameterDefinition;
+import hudson.model.ParameterDefinition.ParameterDescriptor;
 import hudson.model.ParametersDefinitionProperty;
 import hudson.model.Queue.FlyweightTask;
 import hudson.model.labels.LabelAtom;
@@ -41,12 +43,14 @@ import hudson.util.FormValidation;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
 import javax.servlet.ServletException;
 
+import jenkins.model.Jenkins;
 import jenkins.util.TimeDuration;
 
 import net.sf.json.JSONObject;
@@ -56,7 +60,7 @@ import org.kohsuke.stapler.QueryParameter;
 import org.kohsuke.stapler.StaplerRequest;
 import org.kohsuke.stapler.StaplerResponse;
 
-import org.jenkinsci.plugins.GeneratorRun;
+import com.google.common.collect.Lists;
 
 /**
  * Defines project which build action is to generates a new job configuration.
@@ -94,32 +98,38 @@ public class JobGenerator extends Project<JobGenerator, GeneratorRun>
     }
 
     /**
-     * Returns plugin own parameter definition property containing only
-     * template parameters.
-     * It return always the parameter definition of the top most
-     * project of the hierarchy.
+     * Returns plugin own parameter definition property which wraps the real
+     * one.
      */
     @Override
     public <T extends JobProperty> T getProperty(Class<T> clazz) {
         T res = super.getProperty(clazz);
         if(ParametersDefinitionProperty.class == clazz){
-            TemplateParametersDefinitionProperty newres = null;
             if(res != null){
-                newres = new TemplateParametersDefinitionProperty(
-                                           (ParametersDefinitionProperty) res);
-                if(newres.getParameterDefinitions().isEmpty()){
-                    newres = (TemplateParametersDefinitionProperty)
+                // wrap parameter definitions and merge with top most project
+                // parameters
+                GeneratorParametersDefinitionProperty newres =
+                    new GeneratorParametersDefinitionProperty(
+                                           (ParametersDefinitionProperty) res,
+                                           this);
+                GeneratorParametersDefinitionProperty topmost =
+                    (GeneratorParametersDefinitionProperty)
                                   this.getTopMostParameterDefinitionProperty();
+                if(topmost != null){
+                    List<ParameterDefinition> lpd =
+                                             topmost.getParameterDefinitions();
+                    for(ParameterDefinition pd: Lists.reverse(lpd)) {
+                        newres.getParameterDefinitions().add(0, pd);
+                    }
                 }
+                res = (T) newres;
             }
             else{
-                newres = (TemplateParametersDefinitionProperty)
+                GeneratorParametersDefinitionProperty newres =
+                    (GeneratorParametersDefinitionProperty)
                                   this.getTopMostParameterDefinitionProperty();
-            }
-            if(newres != null && !newres.getParameterDefinitions().isEmpty())
-            {
                 newres.setOwner2(this);
-                return (T) newres;
+                res = (T) newres;
             }
         }
         return res;
@@ -190,6 +200,7 @@ public class JobGenerator extends Project<JobGenerator, GeneratorRun>
         return GeneratorRun.class;
     }
 
+    @SuppressWarnings("rawtypes")
     public JobProperty getTopMostParameterDefinitionProperty(){
         AbstractProject topmost = this;
         List<AbstractProject> lup = topmost.getUpstreamProjects();
@@ -247,30 +258,6 @@ public class JobGenerator extends Project<JobGenerator, GeneratorRun>
         p.setOverwrite(this.getOverwrite());
         p.setDelete(this.getDelete());
         p.setProcessAll(this.getProcessAll());
-    }
-
-    private void gatherParameters(AbstractProject up,
-                                  List<ParameterDefinition> lpd){
-        ParametersDefinitionProperty uppdp = (ParametersDefinitionProperty)
-                            up.getProperty(ParametersDefinitionProperty.class);
-        List<ParameterDefinition> uplpd = uppdp.getParameterDefinitions();
-        for(ParameterDefinition uppd: uplpd){
-            if (TemplateKeyValueParameterDefinition.class.isInstance(uppd)){
-                boolean found = false;
-                for(ParameterDefinition pd: lpd){
-                    if(pd.getName().equals(uppd.getName())){
-                        found = true;
-                    }
-                }
-                if(!found){
-                    lpd.add(uppd);
-                }
-            }
-        }
-        List<AbstractProject> upProjects = up.getUpstreamProjects();
-        for(AbstractProject upProject: upProjects){
-            this.gatherParameters(upProject, lpd);
-        }
     }
 
     public static class JobGeneratorDescriptor

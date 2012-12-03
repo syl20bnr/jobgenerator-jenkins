@@ -7,7 +7,7 @@
   </parent>
 
   <artifactId>jobgenerator</artifactId>
-  <version>1.02-SNAPSHOT</version>
+  <version>1.03-SNAPSHOT</version>
   <packaging>hpi</packaging>
   <name>Job Generator</name>
   <description>A job generator which can replicates itself to produce a regular job. The generation can be parameterized via the standard build parameters of Jenkins by adding Template Parameters.</description>
@@ -39,6 +39,14 @@
       <url>http://maven.jenkins-ci.org:8081/content/repositories/releases/</url>
     </repository>
   </distributionManagement>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.jenkins-ci.plugins</groupId>
+      <artifactId>parameterized-trigger</artifactId>
+      <version>2.16</version>
+    </dependency>
+  </dependencies>
 
   <build>
     <plugins>

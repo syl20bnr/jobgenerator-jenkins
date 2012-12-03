@@ -1,7 +1,7 @@
 <!--
 The MIT License
 
-Copyright (c) 2012, Ubisoft Entertainment, Sylvain Benner.
+Copyright (c) 2012, Sylvain Benner.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -22,9 +22,10 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 -->
 
-<div>
-  The display name of the generated job.
-  It is possible to parameterized it. For instance, if a template parameter
-  called <strong>BRANCH_NAME</strong> is defined, the generated display job name can
-  be: <strong>(${BRANCH_NAME}) MyJob</strong>.
-</div>
+<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:d="jelly:define" xmlns:l="/lib/layout" xmlns:t="/lib/hudson" xmlns:f="/lib/form">
+
+  <f:entry field="properties" title="Parameters">
+    <f:textarea />
+  </f:entry>
+
+</j:jelly>
