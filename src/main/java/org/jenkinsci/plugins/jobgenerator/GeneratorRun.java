@@ -369,7 +369,7 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                node.getParent().getName().equals("org.jenkinsci.plugins." +
                              "jobgenerator.GeneratorKeyValueBuildParameters")){
                 // harvest variables passed by the parameterized trigger plugin
-                String t = node.getTextTrim();
+                String t = node.getText();
                 if(t.contains("=")){
                     Properties p = new Properties();
                     try {
