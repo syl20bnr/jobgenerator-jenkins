@@ -369,7 +369,7 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                node.getParent().getName().equals("org.jenkinsci.plugins." +
                              "jobgenerator.GeneratorKeyValueBuildParameters")){
                 // harvest variables passed by the parameterized trigger plugin
-                String t = node.getTextTrim();
+                String t = node.getText();
                 if(t.contains("=")){
                     Properties p = new Properties();
                     try {
@@ -432,7 +432,9 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
         public void visit(Element node) {
             String n = node.getName();
             if(n.contains("GeneratorKeyValueParameterDefinition") ||
-               n.contains("GeneratorKeyValueBuildParameters")){
+               n.contains("GeneratorChoiceParameterDefinition") ||
+               n.contains("GeneratorKeyValueBuildParameters") ||
+               n.contains("GeneratorCurrentParameters")){
                 this.toRemove.add(node);
             }
         }

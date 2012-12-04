@@ -105,6 +105,9 @@ public class JobGenerator extends Project<JobGenerator, GeneratorRun>
     public <T extends JobProperty> T getProperty(Class<T> clazz) {
         T res = super.getProperty(clazz);
         if(ParametersDefinitionProperty.class == clazz){
+            GeneratorParametersDefinitionProperty topmost =
+                    (GeneratorParametersDefinitionProperty)
+                                  this.getTopMostParameterDefinitionProperty();
             if(res != null){
                 // wrap parameter definitions and merge with top most project
                 // parameters
@@ -112,24 +115,31 @@ public class JobGenerator extends Project<JobGenerator, GeneratorRun>
                     new GeneratorParametersDefinitionProperty(
                                            (ParametersDefinitionProperty) res,
                                            this);
-                GeneratorParametersDefinitionProperty topmost =
-                    (GeneratorParametersDefinitionProperty)
-                                  this.getTopMostParameterDefinitionProperty();
                 if(topmost != null){
                     List<ParameterDefinition> lpd =
                                              topmost.getParameterDefinitions();
                     for(ParameterDefinition pd: Lists.reverse(lpd)) {
                         newres.getParameterDefinitions().add(0, pd);
                     }
+                    newres.addGlobalParameters(lpd);
+                    lpd = ((ParametersDefinitionProperty)res).
+                                                     getParameterDefinitions();
+                    newres.addLocalParameters(lpd);
+                }
+                else {
+                    List<ParameterDefinition> lpd =
+                        ((ParametersDefinitionProperty)res).
+                                                     getParameterDefinitions();
+                    newres.addGlobalParameters(lpd);
                 }
                 res = (T) newres;
             }
-            else{
-                GeneratorParametersDefinitionProperty newres =
-                    (GeneratorParametersDefinitionProperty)
-                                  this.getTopMostParameterDefinitionProperty();
-                newres.setOwner2(this);
-                res = (T) newres;
+            else if(topmost != null){
+                List<ParameterDefinition> lpd =
+                                             topmost.getParameterDefinitions();
+                topmost.addGlobalParameters(lpd);
+                topmost.setOwner2(this);
+                res = (T) topmost;
             }
         }
         return res;
