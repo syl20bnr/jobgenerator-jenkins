@@ -22,9 +22,17 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 -->
 
-<div>
-  Defines a generator parameter which a key value pair.
-  <p/>
-  This parameter is used for the job configuration generation only and does
-  not appear in the generated configurations.
-</div>
+<?jelly escape-by-default='true'?>
+<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:d="jelly:define"
+         xmlns:l="/lib/layout" xmlns:t="/lib/hudson" xmlns:f="/lib/form"
+         xmlns:i="jelly:fmt" xmlns:p="/lib/hudson/project">
+  <f:entry title="${%Name}" help="/help/parameter/name.html">
+    <f:textbox name="parameter.name" value="${instance.name}" />
+  </f:entry>
+  <f:entry title="${%Choices}" help="/help/parameter/choice-choices.html">
+    <f:textarea name="parameter.choices" value="${instance.choicesText}" />
+  </f:entry>
+  <f:entry title="${%Description}" help="/help/parameter/description.html">
+    <f:textarea name="parameter.description" value="${instance.description}" />
+   </f:entry>
+</j:jelly>

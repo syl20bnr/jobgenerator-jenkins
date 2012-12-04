@@ -43,15 +43,30 @@ THE SOFTWARE.
       <j:set var="delay" value="${request.getParameter('delay')}" />
       <f:form method="post" action="build${empty(delay)?'':'?delay='+delay}" name="parameters"
               tableClass="parameters">
-        <f:section title="${%Generation Parameters}">
-            <j:forEach var="parameterDefinition" items="${it.parameterDefinitions}">
+        <j:set var="globalParameters" value="${it.globalParameters}" />
+        <j:if test="${!empty(globalParameters)}">
+          <f:section title="${%Global Generation Parameters}">
+            <j:forEach var="parameterDefinition" items="${globalParameters}">
               <f:block>
                 <table height="10" />
               </f:block>
               <st:include it="${parameterDefinition}"
                           page="${parameterDefinition.descriptor.valuePage}" />
             </j:forEach>
-        </f:section>
+          </f:section>
+        </j:if>
+        <j:set var="localParameters" value="${it.localParameters}" />
+        <j:if test="${!empty(localParameters)}">
+          <f:section title="${%Local Generation Parameters}">
+            <j:forEach var="parameterDefinition" items="${localParameters}">
+              <f:block>
+                <table height="10" />
+              </f:block>
+              <st:include it="${parameterDefinition}"
+                          page="${parameterDefinition.descriptor.valuePage}" />
+            </j:forEach>
+          </f:section>
+        </j:if>
         <f:section title="${%Options}">
           <f:optionalBlock name="processall" title="${%Process downstream jobs}" checked="true" help="/plugin/jobgenerator/help-processall.html"/>
           <f:optionalBlock name="overwrite" title="${%Overwrite existing jobs}" checked="false" help="/plugin/jobgenerator/help-overwrite.html"/>
