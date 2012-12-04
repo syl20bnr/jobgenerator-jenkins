@@ -28,7 +28,6 @@ import hudson.Extension;
 import hudson.model.AbstractBuild;
 import hudson.model.Action;
 import hudson.model.Descriptor;
-import hudson.model.FileParameterValue;
 import hudson.model.ParameterValue;
 import hudson.model.ParametersAction;
 import hudson.model.TaskListener;
@@ -40,6 +39,12 @@ import java.util.List;
 
 import org.kohsuke.stapler.DataBoundConstructor;
 
+/**
+ * Generator Build Parameter of the current build.
+ * This class is an add-on to the parameterized build trigger plugin.
+ * 
+ * @author <a href="mailto:sylvain.benner@gmail.com">Sylvain Benner</a>
+ */
 public class GeneratorCurrentParameters extends AbstractBuildParameters {
 
     @DataBoundConstructor

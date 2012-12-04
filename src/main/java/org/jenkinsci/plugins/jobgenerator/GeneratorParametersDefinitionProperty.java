@@ -69,7 +69,8 @@ public class GeneratorParametersDefinitionProperty
                                           new ArrayList<ParameterDefinition>();
         List<ParameterDefinition> lpd = property.getParameterDefinitions();
         for(ParameterDefinition pd: lpd){
-            if (GeneratorKeyValueParameterDefinition.class.isInstance(pd)){
+            if (GeneratorKeyValueParameterDefinition.class.isInstance(pd) ||
+                GeneratorChoiceParameterDefinition.class.isInstance(pd)){
                 this.generatorParameterDefinitions.add(pd);
             }
         }
