@@ -432,7 +432,8 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
         public void visit(Element node) {
             String n = node.getName();
             if(n.contains("GeneratorKeyValueParameterDefinition") ||
-               n.contains("GeneratorKeyValueBuildParameters")){
+               n.contains("GeneratorKeyValueBuildParameters") ||
+               n.contains("GeneratorCurrentParameters")){
                 this.toRemove.add(node);
             }
         }
