@@ -60,6 +60,8 @@ public class GeneratorParametersDefinitionProperty
                          GeneratorParametersDefinitionProperty.class.getName());
 
     private transient List<ParameterDefinition> generatorParameterDefinitions;
+    private transient List<ParameterDefinition> globalParameterDefinitions;
+    private transient List<ParameterDefinition> localParameterDefinitions;
 
     public GeneratorParametersDefinitionProperty(
             ParametersDefinitionProperty property,
@@ -74,11 +76,38 @@ public class GeneratorParametersDefinitionProperty
                 this.generatorParameterDefinitions.add(pd);
             }
         }
+        this.globalParameterDefinitions = new ArrayList<ParameterDefinition>();
+        this.localParameterDefinitions = new ArrayList<ParameterDefinition>();
     }
 
     // required since setOwner is protected.
     public void setOwner2(JobGenerator owner){
         this.owner = owner;
+    }
+
+    public void addGlobalParameters(List<ParameterDefinition> params){
+        this.addParameters(params, this.globalParameterDefinitions);
+    }
+    public List<ParameterDefinition> getGlobalParameters(){
+        return this.globalParameterDefinitions;
+    }
+
+    public void addLocalParameters(List<ParameterDefinition> params){
+        this.addParameters(params, this.localParameterDefinitions);
+    }
+    public List<ParameterDefinition> getLocalParameters(){
+        return this.localParameterDefinitions;
+    }
+
+    private void addParameters(List<ParameterDefinition> in,
+                              List<ParameterDefinition> out){
+        out.clear();
+        for(ParameterDefinition pd: in){
+            if(GeneratorKeyValueParameterDefinition.class.isInstance(pd) ||
+               GeneratorChoiceParameterDefinition.class.isInstance(pd)) {
+                out.add(pd);
+            }
+        }
     }
 
     @Override
