@@ -34,13 +34,9 @@ import hudson.model.AbstractProject;
 import hudson.model.Cause;
 import hudson.model.ParametersAction;
 import hudson.model.Run;
-import hudson.model.StringParameterValue;
 import hudson.plugins.parameterizedtrigger.AbstractBuildParameters;
 import hudson.plugins.parameterizedtrigger.BuildTrigger;
 import hudson.plugins.parameterizedtrigger.BuildTriggerConfig;
-import hudson.plugins.parameterizedtrigger.CurrentBuildParameters;
-import hudson.tasks.BuildStep;
-import hudson.tasks.Builder;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
@@ -48,10 +44,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
-import java.text.MessageFormat;
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.ListIterator;
@@ -214,15 +207,21 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                 // Create/Update Job
                 doc.normalize();
                 InputStream is = new ByteArrayInputStream(
-                                                doc.asXML().getBytes("UTF-8")); 
-                if(Jenkins.getInstance().getItem(expName) != null ){
+                                                doc.asXML().getBytes("UTF-8"));
+                boolean created =
+                    Jenkins.getInstance().getItem(expName) == null;
+                if(created){
+                    LOGGER.info(String.format("Created job %s", expName));
+                }
+                else{
                     LOGGER.info(String.format("Updated configuration of " +
                                               "job %s", expName));
                 }
-                else{
-                    LOGGER.info(String.format("Created job %s", expName));
-                }
                 Jenkins.getInstance().createProjectFromXML(expName, is);
+                // save generated job name
+                GeneratedJobBuildAction action =
+                                 new GeneratedJobBuildAction(expName, created);
+                getBuild().addAction(action);
             }
             return Result.SUCCESS;
         }

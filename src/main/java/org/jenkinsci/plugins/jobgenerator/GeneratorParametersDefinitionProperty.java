@@ -141,7 +141,7 @@ public class GeneratorParametersDefinitionProperty
             o = json.getJSONObject("processall");
             p.setProcessAll(!o.isNullObject());
         }
-        super._doBuild(req, rsp, delay);
+        super._doBuild(req, rsp, new TimeDuration(0));
     }
 
     @Exported
