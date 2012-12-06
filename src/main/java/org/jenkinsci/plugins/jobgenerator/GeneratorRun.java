@@ -72,6 +72,8 @@ import org.dom4j.Visitor;
 import org.dom4j.VisitorSupport;
 import org.dom4j.io.SAXReader;
 
+import com.google.common.collect.Sets;
+
 /**
  * Generates a configured job by copying this job config.xml and replacing
  * generator parameters with values provided by the user at build time.
@@ -214,15 +216,21 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                 // Create/Update Job
                 doc.normalize();
                 InputStream is = new ByteArrayInputStream(
-                                                doc.asXML().getBytes("UTF-8")); 
-                if(Jenkins.getInstance().getItem(expName) != null ){
+                                                doc.asXML().getBytes("UTF-8"));
+                boolean created =
+                    Jenkins.getInstance().getItem(expName) == null;
+                if(created){
+                    LOGGER.info(String.format("Created job %s", expName));
+                }
+                else{
                     LOGGER.info(String.format("Updated configuration of " +
                                               "job %s", expName));
                 }
-                else{
-                    LOGGER.info(String.format("Created job %s", expName));
-                }
                 Jenkins.getInstance().createProjectFromXML(expName, is);
+                // save generated job name
+                GeneratedJobBuildAction action =
+                                 new GeneratedJobBuildAction(expName, created);
+                getBuild().addAction(action);
             }
             return Result.SUCCESS;
         }
