@@ -34,13 +34,9 @@ import hudson.model.AbstractProject;
 import hudson.model.Cause;
 import hudson.model.ParametersAction;
 import hudson.model.Run;
-import hudson.model.StringParameterValue;
 import hudson.plugins.parameterizedtrigger.AbstractBuildParameters;
 import hudson.plugins.parameterizedtrigger.BuildTrigger;
 import hudson.plugins.parameterizedtrigger.BuildTriggerConfig;
-import hudson.plugins.parameterizedtrigger.CurrentBuildParameters;
-import hudson.tasks.BuildStep;
-import hudson.tasks.Builder;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
@@ -48,10 +44,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
-import java.text.MessageFormat;
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.ListIterator;
@@ -71,8 +64,6 @@ import org.dom4j.Text;
 import org.dom4j.Visitor;
 import org.dom4j.VisitorSupport;
 import org.dom4j.io.SAXReader;
-
-import com.google.common.collect.Sets;
 
 /**
  * Generates a configured job by copying this job config.xml and replacing
