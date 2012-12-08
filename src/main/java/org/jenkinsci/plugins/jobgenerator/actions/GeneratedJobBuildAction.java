@@ -22,7 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
  */
 
-package org.jenkinsci.plugins.jobgenerator;
+package org.jenkinsci.plugins.jobgenerator.actions;
 
 import hudson.model.Action;
 
@@ -31,7 +31,7 @@ import hudson.model.Action;
  * 
  * @author <a href="mailto:sylvain.benner@gmail.com">Sylvain Benner</a>
  */
-class GeneratedJobBuildAction implements Action {
+public class GeneratedJobBuildAction implements Action {
     public final String jobName;
     public final boolean created;
 

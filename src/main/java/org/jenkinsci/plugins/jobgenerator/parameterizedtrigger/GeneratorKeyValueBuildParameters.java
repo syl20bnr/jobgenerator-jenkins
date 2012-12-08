@@ -22,8 +22,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-package org.jenkinsci.plugins.jobgenerator;
+package org.jenkinsci.plugins.jobgenerator.parameterizedtrigger;
 
+import hudson.EnvVars;
 import hudson.Extension;
 import hudson.model.AbstractBuild;
 import hudson.model.Action;
@@ -36,52 +37,53 @@ import hudson.plugins.parameterizedtrigger.AbstractBuildParameters;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+
+import org.apache.tools.ant.filters.StringInputStream;
 
 import org.kohsuke.stapler.DataBoundConstructor;
 
+import org.jenkinsci.plugins.jobgenerator.parameters.*;
+
 /**
- * Generator Build Parameter of the current build.
+ * Default Generator Build Parameter which is a key value.
  * This class is an add-on to the parameterized build trigger plugin.
  * 
  * @author <a href="mailto:sylvain.benner@gmail.com">Sylvain Benner</a>
  */
-public class GeneratorCurrentParameters extends AbstractBuildParameters {
+public class GeneratorKeyValueBuildParameters extends AbstractBuildParameters {
+
+    private final String properties;
 
     @DataBoundConstructor
-    public GeneratorCurrentParameters() {
+    public GeneratorKeyValueBuildParameters(String properties) {
+        this.properties = properties;
     }
 
-    @Override
     public Action getAction(AbstractBuild<?, ?> build, TaskListener listener)
-            throws IOException {
-
-        ParametersAction action = build.getAction(ParametersAction.class);
-        if (action == null) {
-            listener.getLogger().println(
-                    "[parameterized-trigger] Current build has no " + 
-                    "build parameters.");
-            return null;
-        } else {
-            List<ParameterValue> values = new ArrayList<ParameterValue>(action
-                    .getParameters().size());
-            for (ParameterValue value : action.getParameters()){
-                if(GeneratorKeyValueParameterValue.class.isInstance(value)){
-                    values.add(value);
-                }
-            }
-            return values.isEmpty() ? null : new ParametersAction(values);
+            throws IOException, InterruptedException {
+        EnvVars env = build.getEnvironment(listener);
+        Properties p = new Properties();
+        p.load(new StringInputStream(properties));
+        List<ParameterValue> values = new ArrayList<ParameterValue>();
+        for (Map.Entry<Object, Object> entry : p.entrySet()) {
+            values.add(new GeneratorKeyValueParameterValue(entry.getKey()
+                    .toString(), env.expand(entry.getValue().toString())));
         }
+        return new ParametersAction(values);
+    }
+
+    public String getProperties() {
+        return properties;
     }
 
     @Extension
     public static class DescriptorImpl extends
             Descriptor<AbstractBuildParameters> {
-
         @Override
         public String getDisplayName() {
-            return "Current generator parameters";
+            return "Generator parameters";
         }
-
     }
-
 }

@@ -65,6 +65,10 @@ import org.dom4j.Visitor;
 import org.dom4j.VisitorSupport;
 import org.dom4j.io.SAXReader;
 
+import org.jenkinsci.plugins.jobgenerator.actions.*;
+import org.jenkinsci.plugins.jobgenerator.parameters.*;
+import org.jenkinsci.plugins.jobgenerator.parameterizedtrigger.*;
+
 /**
  * Generates a configured job by copying this job config.xml and replacing
  * generator parameters with values provided by the user at build time.
@@ -343,7 +347,6 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
     }
 
     class UpdateProjectReferencesVisitor extends VisitorSupport {
-
         private final List<JobGenerator> upordownstreamprojects;
         private final List<ParametersAction> params;
         private Set<Entry<Object, Object>> passedVariables = null;
@@ -365,8 +368,9 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
         public void visit(Element node) {
             String n = node.getName();
             if(n.equals("properties") &&
-               node.getParent().getName().equals("org.jenkinsci.plugins." +
-                             "jobgenerator.GeneratorKeyValueBuildParameters")){
+               node.getParent().getName().contains("org.jenkinsci.plugins." +
+                                       "jobgenerator.parameterizedtrigger." +
+                                          "GeneratorKeyValueBuildParameters")){
                 // harvest variables passed by the parameterized trigger plugin
                 String t = node.getText();
                 if(t.contains("=")){
@@ -421,12 +425,10 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
     }
 
     class GatherElementsToRemoveVisitor extends VisitorSupport {
-
         public List<Element> toRemove = new ArrayList<Element>();
 
         public GatherElementsToRemoveVisitor(){
         }
-
         @Override
         public void visit(Element node) {
             String n = node.getName();
@@ -438,4 +440,17 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
             }
         }
     }
+
+//    class EvaluateConditionalEntries extends VisitorSupport {
+//        @Override
+//        public void visit(Element node) {
+//            String n = node.getName();
+//            if(n.contains("GeneratorKeyValueParameterDefinition") ||
+//               n.contains("GeneratorChoiceParameterDefinition") ||
+//               n.contains("GeneratorKeyValueBuildParameters") ||
+//               n.contains("GeneratorCurrentParameters")){
+//                this.toRemove.add(node);
+//            }
+//        }
+//    }
 }
