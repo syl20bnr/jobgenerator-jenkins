@@ -122,6 +122,25 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
         return expand(p.getGeneratedJobName(), params);
     }
 
+    public static boolean allParametersAreResolved(Element root){
+        List<String> enames = new ArrayList<String>();
+        enames.add("arg1");
+        enames.add("arg2");
+        enames.add("expression");
+        enames.add("label");
+        for(String s: enames){
+            Element e = (Element) root.selectSingleNode("/" + root.getName() +
+                                                        "/*/" + s);
+            if (e != null){
+                String t = e.getText();
+                if (t.contains("${") && t.contains("}")){
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
     public String id(Run run) throws UnsupportedEncodingException {
         return URLEncoder.encode(run.getParent().getFullDisplayName()
                                          + run.getNumber(),
@@ -214,36 +233,67 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                                   "hudson.model.ParametersDefinitionProperty");
                 this.removeNodeIfNoChild(doc, "generatedJobName");
                 this.removeNodeIfNoChild(doc, "generatedDisplayJobName");
-                // Evaluate conditions and gather builders and publishers
-                Element vroot = (Element) doc.selectSingleNode("//builders");
-                if(vroot != null){
-                    v = new EvaluateAndGatherSteps(vroot,
+                // Evaluate builders (Single step)
+                List vroots = doc.selectNodes("//org.jenkinsci.plugins." +
+                   "conditionalbuildstep.singlestep.SingleConditionalBuilder");
+                for (Iterator i = vroots.iterator(); i.hasNext();) {
+                    Element vroot = (Element) i.next();
+                    v = new EvaluateBuildersSingleVisitor(vroot,
                                                (AbstractBuild<?, ?>)getBuild(),
                                                listener);
                     vroot.accept(v);
-                    // replace build steps by the gathered one
-                    for (Iterator i = vroot.elementIterator(); i.hasNext();) {
-                        Element e = (Element) i.next();
-                        e.detach();
+                    for (Element e: ((EvaluateBuildersSingleVisitor)v).toAdd){
+                        List siblings = vroot.getParent().elements();
+                        siblings.add(siblings.indexOf(vroot), e);
                     }
-                    for (Element e: ((EvaluateAndGatherSteps)v).elements){
-                        vroot.add(e);
+                    for (Element e:
+                         ((EvaluateBuildersSingleVisitor)v).toRemove) {
+                        e.detach();
                     }
                 }
-                vroot = (Element) doc.selectSingleNode("//publishers");
-                if(vroot != null){
-                    v = new EvaluateAndGatherSteps(vroot,
+                // Evaluate builders (Multiple steps)
+                vroots = doc.selectNodes("//org.jenkinsci.plugins." +
+                                    "conditionalbuildstep.ConditionalBuilder");
+                for (Iterator i = vroots.iterator(); i.hasNext();) {
+                    Element vroot = (Element) i.next();
+                    v = new EvaluateBuildersMultiVisitor(vroot,
                                                (AbstractBuild<?, ?>)getBuild(),
                                                listener);
                     vroot.accept(v);
-                    // replace build steps by the gathered one
-                    for (Iterator i = vroot.elementIterator(); i.hasNext();) {
-                        Element e = (Element) i.next();
+                    for (Element e: ((EvaluateBuildersMultiVisitor)v).toAdd){
+                        List siblings = vroot.getParent().elements();
+                        siblings.add(siblings.indexOf(vroot), e);
+                    }
+                    for (Element e:
+                         ((EvaluateBuildersMultiVisitor)v).toRemove) {
                         e.detach();
                     }
-                    for (Element e: ((EvaluateAndGatherSteps)v).elements){
-                        vroot.add(e);
+                }
+                // Evaluate publishers
+                Element flexroot = (Element) doc.selectSingleNode(
+                                "//org.jenkins__ci.plugins." +
+                                "flexible__publish.FlexiblePublisher");
+                if(flexroot != null){
+                    vroots = doc.selectNodes("//org.jenkins__ci.plugins." +
+                                     "flexible__publish.ConditionalPublisher");
+                    for (Iterator i = vroots.iterator(); i.hasNext();) {
+                        Element vroot = (Element) i.next();
+                        v = new EvaluatePublishersVisitor(vroot,
+                                               (AbstractBuild<?, ?>)getBuild(),
+                                               listener);
+                        vroot.accept(v);
+                        for (Element e: ((EvaluatePublishersVisitor)v).toAdd){
+                            List siblings = flexroot.getParent().elements();
+                            siblings.add(siblings.indexOf(flexroot), e);
+                        }
+                        for (Element e:
+                             ((EvaluatePublishersVisitor)v).toRemove) {
+                            e.detach();
+                        }
                     }
+                    this.removeNodeIfNoChild(flexroot, "publishers");
+                    this.removeNodeIfNoChild(doc, "org.jenkins__ci.plugins." +
+                                        "flexible__publish.FlexiblePublisher");
                 }
                 // Create/Update Job
                 doc.normalize();
@@ -322,8 +372,8 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
             }
         }
 
-        private void removeNodeIfNoChild(Document doc, String elem) {
-            List list = doc.selectNodes("//" + elem);
+        private void removeNodeIfNoChild(Node root, String elem) {
+            List list = root.selectNodes("//" + elem);
             for (Iterator iter = list.iterator(); iter.hasNext(); ) {
                 Node node = (Node) iter.next();
                 if(node.selectNodes("./*").isEmpty()){
@@ -479,39 +529,44 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
         }
     }
 
-    class EvaluateAndGatherSteps extends VisitorSupport {
+    class EvaluateBuildersSingleVisitor extends VisitorSupport {
         private final Element root;
         private final AbstractBuild<?, ?> build;
         private final BuildListener listener;
-        private boolean include;
-        public List<Element> elements;
-        public EvaluateAndGatherSteps(
+        public List<Element> toAdd;
+        public List<Element> toRemove;
+        public EvaluateBuildersSingleVisitor(
                 Element root,
                 AbstractBuild<?, ?> build,
                 BuildListener listener){
             this.root = root;
             this.build = build;
             this.listener = listener;
-            this.elements = new ArrayList<Element>();
-            this.include = false;
+            this.toAdd = new ArrayList<Element>();
+            this.toRemove = new ArrayList<Element>();
         }
 
         @Override
-        public void visit(Attribute node) {
+        public void visit(Element node) {
             String n = node.getName();
-            String v = node.getValue();
-            Element p = node.getParent();
-            boolean condelement = p.getName().equals("condition") ||
-                                  p.getName().equals("runCondition");
-            if(condelement &&
-               n.equals("plugin") && v.contains("run-condition")){
+            if (n.equals("condition") && node.attribute("plugin") != null &&
+                GeneratorRun.allParametersAreResolved(node)){
+                // convert this chunk of xml config to a file
+                InputStream is;
                 try {
-                    // convert this chunk of xml config to a file
-                    InputStream is = new ByteArrayInputStream(
-                                                  p.asXML().getBytes("UTF-8"));
+                    is = new ByteArrayInputStream(
+                                               node.asXML().getBytes("UTF-8"));
                     XStream2 xs = new XStream2();
                     RunCondition rc = (RunCondition) xs.fromXML(is);
-                    this.include = rc.runPerform(this.build, listener);
+                    if(rc.runPerform(this.build, listener)){
+                        Element builder =
+                            (Element)this.root.selectSingleNode("buildStep");
+                        Element ne = builder.createCopy();
+                        ne.setName(ne.attributeValue("class"));
+                        ne.attribute("class").detach();
+                        this.toAdd.add(ne);
+                    }
+                    this.toRemove.add(this.root);
                 } catch (UnsupportedEncodingException e) {
                 } catch (FileNotFoundException e) {
                 } catch (IOException e) {
@@ -519,34 +574,102 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                 }
             }
         }
+    }
+
+    class EvaluateBuildersMultiVisitor extends VisitorSupport {
+        private final Element root;
+        private final AbstractBuild<?, ?> build;
+        private final BuildListener listener;
+        public List<Element> toAdd;
+        public List<Element> toRemove;
+        public EvaluateBuildersMultiVisitor(
+                Element root,
+                AbstractBuild<?, ?> build,
+                BuildListener listener){
+            this.root = root;
+            this.build = build;
+            this.listener = listener;
+            this.toAdd = new ArrayList<Element>();
+            this.toRemove = new ArrayList<Element>();
+        }
 
         @Override
         public void visit(Element node) {
-            Element p = node.getParent();
             String n = node.getName();
-            boolean notconditional = (p != null && p == this.root &&
-                                      !n.contains("ConditionalBuilder") &&
-                                      !n.contains("FlexiblePublisher"));
-            if (notconditional){
-                // regular step
-                this.elements.add(node.createCopy());
-            }
-            else if (this.include && (n.equals("buildStep") ||
-                                      n.equals("publisher"))){
-                // single step or publisher
-                Element ne = node.createCopy();
-                ne.setName(ne.attributeValue("class"));
-                ne.attribute("class").detach();
-                this.elements.add(ne);
-                this.include = false;
-            }
-            else if (this.include && n.equals("conditionalbuilders")){
-                // multiple steps
-                for (Iterator i = node.elementIterator(); i.hasNext();) {
-                    Element e = (Element) i.next();
-                    this.elements.add(e.createCopy());
+            if (n.equals("runCondition") && node.attribute("plugin") != null &&
+                GeneratorRun.allParametersAreResolved(node)){
+                try {
+                    InputStream is = new ByteArrayInputStream(
+                                               node.asXML().getBytes("UTF-8"));
+                    XStream2 xs = new XStream2();
+                    RunCondition rc = (RunCondition) xs.fromXML(is);
+                    if(rc.runPerform(this.build, listener)){
+                        Element broot = (Element)this.root.selectSingleNode(
+                                                      "conditionalbuilders");
+                        if (broot != null){
+                            List builders = broot.elements();
+                            for (Iterator i = builders.iterator();
+                                                                i.hasNext();) {
+                                Element b = (Element) i.next();
+                                Element ne = b.createCopy();
+                                this.toAdd.add(ne);
+                            }
+                        }
+                    }
+                    this.toRemove.add(this.root);
+                } catch (UnsupportedEncodingException e) {
+                } catch (FileNotFoundException e) {
+                } catch (IOException e) {
+                } catch (Exception e) {
                 }
-                this.include = false;
+            }
+        }
+    }
+
+
+    class EvaluatePublishersVisitor extends VisitorSupport {
+        private final Element root;
+        private final AbstractBuild<?, ?> build;
+        private final BuildListener listener;
+        public List<Element> toAdd;
+        public List<Element> toRemove;
+        public EvaluatePublishersVisitor(
+                Element root,
+                AbstractBuild<?, ?> build,
+                BuildListener listener){
+            this.root = root;
+            this.build = build;
+            this.listener = listener;
+            this.toAdd = new ArrayList<Element>();
+            this.toRemove = new ArrayList<Element>();
+        }
+
+        @Override
+        public void visit(Element node) {
+            String n = node.getName();
+            if (n.equals("condition") && node.attribute("plugin") != null &&
+                GeneratorRun.allParametersAreResolved(node)){
+                // convert this chunk of xml config to a file
+                InputStream is;
+                try {
+                    is = new ByteArrayInputStream(
+                                               node.asXML().getBytes("UTF-8"));
+                    XStream2 xs = new XStream2();
+                    RunCondition rc = (RunCondition) xs.fromXML(is);
+                    if(rc.runPerform(this.build, listener)){
+                        Element builder =
+                            (Element)this.root.selectSingleNode("publisher");
+                        Element ne = builder.createCopy();
+                        ne.setName(ne.attributeValue("class"));
+                        ne.attribute("class").detach();
+                        this.toAdd.add(ne);
+                    }
+                    this.toRemove.add(this.root);
+                } catch (UnsupportedEncodingException e) {
+                } catch (FileNotFoundException e) {
+                } catch (IOException e) {
+                } catch (Exception e) {
+                }
             }
         }
     }
