@@ -62,6 +62,8 @@ import org.kohsuke.stapler.StaplerResponse;
 
 import com.google.common.collect.Lists;
 
+import org.jenkinsci.plugins.jobgenerator.parameters.*;
+
 /**
  * Defines project which build action is to generates a new job configuration.
  *

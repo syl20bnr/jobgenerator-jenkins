@@ -22,7 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-package org.jenkinsci.plugins.jobgenerator;
+package org.jenkinsci.plugins.jobgenerator.parameterizedtrigger;
 
 import hudson.Extension;
 import hudson.model.AbstractBuild;
@@ -38,6 +38,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.kohsuke.stapler.DataBoundConstructor;
+
+import org.jenkinsci.plugins.jobgenerator.parameters.*;
 
 /**
  * Generator Build Parameter of the current build.
@@ -73,7 +75,7 @@ public class GeneratorCurrentParameters extends AbstractBuildParameters {
         }
     }
 
-    @Extension
+    @Extension(optional = true)
     public static class DescriptorImpl extends
             Descriptor<AbstractBuildParameters> {
 
