@@ -24,9 +24,7 @@ THE SOFTWARE.
 
 package org.jenkinsci.plugins.jobgenerator;
 
-import groovy.util.Eval;
 import hudson.Util;
-import hudson.XmlFile;
 import hudson.model.Build;
 import hudson.model.BuildListener;
 import hudson.model.ParameterValue;
@@ -35,7 +33,6 @@ import hudson.model.TopLevelItem;
 import hudson.model.AbstractBuild;
 import hudson.model.AbstractProject;
 import hudson.model.Cause;
-import hudson.model.Descriptor;
 import hudson.model.ParametersAction;
 import hudson.model.Run;
 import hudson.plugins.parameterizedtrigger.AbstractBuildParameters;
@@ -46,10 +43,8 @@ import hudson.util.XStream2;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.util.ArrayList;
@@ -75,11 +70,8 @@ import org.dom4j.VisitorSupport;
 import org.dom4j.io.SAXReader;
 
 import org.jenkins_ci.plugins.run_condition.RunCondition;
-import org.jenkins_ci.plugins.run_condition.RunCondition.RunConditionDescriptor;
-import org.jenkins_ci.plugins.run_condition.common.AlwaysPrebuildRunCondition;
 import org.jenkinsci.plugins.jobgenerator.actions.*;
 import org.jenkinsci.plugins.jobgenerator.parameters.*;
-import org.jenkinsci.plugins.jobgenerator.parameterizedtrigger.*;
 
 /**
  * Generates a configured job by copying this job config.xml and replacing
@@ -306,8 +298,8 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                         importParams.addAll(lpa);
                         List<AbstractBuildParameters> lbp = c.getConfigs();
                         for(AbstractBuildParameters bp: lbp){
-                            if(GeneratorKeyValueBuildParameters.class.
-                                                               isInstance(bp)){
+                            if(bp.getClass().getSimpleName().equals(
+                                          "GeneratorKeyValueBuildParameters")){
                                 importParams.add((ParametersAction)
                                     bp.getAction(GeneratorRun.this, listener));
                             }

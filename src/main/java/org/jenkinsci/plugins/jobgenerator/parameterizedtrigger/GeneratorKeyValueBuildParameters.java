@@ -78,7 +78,7 @@ public class GeneratorKeyValueBuildParameters extends AbstractBuildParameters {
         return properties;
     }
 
-    @Extension
+    @Extension(optional = true)
     public static class DescriptorImpl extends
             Descriptor<AbstractBuildParameters> {
         @Override
