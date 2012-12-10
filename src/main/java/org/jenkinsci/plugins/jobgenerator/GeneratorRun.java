@@ -30,6 +30,7 @@ import hudson.model.BuildListener;
 import hudson.model.ParameterValue;
 import hudson.model.Result;
 import hudson.model.TopLevelItem;
+import hudson.model.AbstractBuild;
 import hudson.model.AbstractProject;
 import hudson.model.Cause;
 import hudson.model.ParametersAction;
@@ -37,9 +38,11 @@ import hudson.model.Run;
 import hudson.plugins.parameterizedtrigger.AbstractBuildParameters;
 import hudson.plugins.parameterizedtrigger.BuildTrigger;
 import hudson.plugins.parameterizedtrigger.BuildTriggerConfig;
+import hudson.util.XStream2;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
@@ -57,6 +60,7 @@ import java.util.logging.Logger;
 import jenkins.model.Jenkins;
 
 import org.apache.tools.ant.filters.StringInputStream;
+import org.dom4j.Attribute;
 import org.dom4j.Document;
 import org.dom4j.Element;
 import org.dom4j.Node;
@@ -64,6 +68,10 @@ import org.dom4j.Text;
 import org.dom4j.Visitor;
 import org.dom4j.VisitorSupport;
 import org.dom4j.io.SAXReader;
+
+import org.jenkins_ci.plugins.run_condition.RunCondition;
+import org.jenkinsci.plugins.jobgenerator.actions.*;
+import org.jenkinsci.plugins.jobgenerator.parameters.*;
 
 /**
  * Generates a configured job by copying this job config.xml and replacing
@@ -114,6 +122,25 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
         return expand(p.getGeneratedJobName(), params);
     }
 
+    public static boolean allParametersAreResolved(Element root){
+        List<String> enames = new ArrayList<String>();
+        enames.add("arg1");
+        enames.add("arg2");
+        enames.add("expression");
+        enames.add("label");
+        for(String s: enames){
+            Element e = (Element) root.selectSingleNode("/" + root.getName() +
+                                                        "/*/" + s);
+            if (e != null){
+                String t = e.getText();
+                if (t.contains("${") && t.contains("}")){
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
     public String id(Run run) throws UnsupportedEncodingException {
         return URLEncoder.encode(run.getParent().getFullDisplayName()
                                          + run.getNumber(),
@@ -132,6 +159,8 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
         }
 
         protected Result doRun(BuildListener listener) throws Exception {
+            // TODO syl20bnr: This function is a big mess. I plan to
+            // refactoring it when it comes to add some tests.
             if(!this.checkParameters(listener)){
                 return Result.FAILURE;
             }
@@ -204,10 +233,73 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                                   "hudson.model.ParametersDefinitionProperty");
                 this.removeNodeIfNoChild(doc, "generatedJobName");
                 this.removeNodeIfNoChild(doc, "generatedDisplayJobName");
+                // Evaluate builders (Single step)
+                List vroots = doc.selectNodes("//org.jenkinsci.plugins." +
+                   "conditionalbuildstep.singlestep.SingleConditionalBuilder");
+                for (Iterator i = vroots.iterator(); i.hasNext();) {
+                    Element vroot = (Element) i.next();
+                    v = new EvaluateBuildersSingleVisitor(vroot,
+                                               (AbstractBuild<?, ?>)getBuild(),
+                                               listener);
+                    vroot.accept(v);
+                    for (Element e: ((EvaluateBuildersSingleVisitor)v).toAdd){
+                        List siblings = vroot.getParent().elements();
+                        siblings.add(siblings.indexOf(vroot), e);
+                    }
+                    for (Element e:
+                         ((EvaluateBuildersSingleVisitor)v).toRemove) {
+                        e.detach();
+                    }
+                }
+                // Evaluate builders (Multiple steps)
+                vroots = doc.selectNodes("//org.jenkinsci.plugins." +
+                                    "conditionalbuildstep.ConditionalBuilder");
+                for (Iterator i = vroots.iterator(); i.hasNext();) {
+                    Element vroot = (Element) i.next();
+                    v = new EvaluateBuildersMultiVisitor(vroot,
+                                               (AbstractBuild<?, ?>)getBuild(),
+                                               listener);
+                    vroot.accept(v);
+                    for (Element e: ((EvaluateBuildersMultiVisitor)v).toAdd){
+                        List siblings = vroot.getParent().elements();
+                        siblings.add(siblings.indexOf(vroot), e);
+                    }
+                    for (Element e:
+                         ((EvaluateBuildersMultiVisitor)v).toRemove) {
+                        e.detach();
+                    }
+                }
+                // Evaluate publishers
+                Element flexroot = (Element) doc.selectSingleNode(
+                                "//org.jenkins__ci.plugins." +
+                                "flexible__publish.FlexiblePublisher");
+                if(flexroot != null){
+                    vroots = doc.selectNodes("//org.jenkins__ci.plugins." +
+                                     "flexible__publish.ConditionalPublisher");
+                    for (Iterator i = vroots.iterator(); i.hasNext();) {
+                        Element vroot = (Element) i.next();
+                        v = new EvaluatePublishersVisitor(vroot,
+                                               (AbstractBuild<?, ?>)getBuild(),
+                                               listener);
+                        vroot.accept(v);
+                        for (Element e: ((EvaluatePublishersVisitor)v).toAdd){
+                            List siblings = flexroot.getParent().elements();
+                            siblings.add(siblings.indexOf(flexroot), e);
+                        }
+                        for (Element e:
+                             ((EvaluatePublishersVisitor)v).toRemove) {
+                            e.detach();
+                        }
+                    }
+                    this.removeNodeIfNoChild(flexroot, "publishers");
+                    this.removeNodeIfNoChild(doc, "org.jenkins__ci.plugins." +
+                                        "flexible__publish.FlexiblePublisher");
+                }
                 // Create/Update Job
                 doc.normalize();
                 InputStream is = new ByteArrayInputStream(
                                                 doc.asXML().getBytes("UTF-8"));
+//                System.out.println(doc.asXML());
                 boolean created =
                     Jenkins.getInstance().getItem(expName) == null;
                 if(created){
@@ -256,8 +348,8 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                         importParams.addAll(lpa);
                         List<AbstractBuildParameters> lbp = c.getConfigs();
                         for(AbstractBuildParameters bp: lbp){
-                            if(GeneratorKeyValueBuildParameters.class.
-                                                               isInstance(bp)){
+                            if(bp.getClass().getSimpleName().equals(
+                                          "GeneratorKeyValueBuildParameters")){
                                 importParams.add((ParametersAction)
                                     bp.getAction(GeneratorRun.this, listener));
                             }
@@ -280,8 +372,8 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
             }
         }
 
-        private void removeNodeIfNoChild(Document doc, String elem) {
-            List list = doc.selectNodes("//" + elem);
+        private void removeNodeIfNoChild(Node root, String elem) {
+            List list = root.selectNodes("//" + elem);
             for (Iterator iter = list.iterator(); iter.hasNext(); ) {
                 Node node = (Node) iter.next();
                 if(node.selectNodes("./*").isEmpty()){
@@ -343,7 +435,6 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
     }
 
     class UpdateProjectReferencesVisitor extends VisitorSupport {
-
         private final List<JobGenerator> upordownstreamprojects;
         private final List<ParametersAction> params;
         private Set<Entry<Object, Object>> passedVariables = null;
@@ -365,8 +456,9 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
         public void visit(Element node) {
             String n = node.getName();
             if(n.equals("properties") &&
-               node.getParent().getName().equals("org.jenkinsci.plugins." +
-                             "jobgenerator.GeneratorKeyValueBuildParameters")){
+               node.getParent().getName().contains("org.jenkinsci.plugins." +
+                                       "jobgenerator.parameterizedtrigger." +
+                                          "GeneratorKeyValueBuildParameters")){
                 // harvest variables passed by the parameterized trigger plugin
                 String t = node.getText();
                 if(t.contains("=")){
@@ -421,11 +513,9 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
     }
 
     class GatherElementsToRemoveVisitor extends VisitorSupport {
-
         public List<Element> toRemove = new ArrayList<Element>();
 
-        public GatherElementsToRemoveVisitor(){
-        }
+        public GatherElementsToRemoveVisitor(){}
 
         @Override
         public void visit(Element node) {
@@ -435,6 +525,151 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                n.contains("GeneratorKeyValueBuildParameters") ||
                n.contains("GeneratorCurrentParameters")){
                 this.toRemove.add(node);
+            }
+        }
+    }
+
+    class EvaluateBuildersSingleVisitor extends VisitorSupport {
+        private final Element root;
+        private final AbstractBuild<?, ?> build;
+        private final BuildListener listener;
+        public List<Element> toAdd;
+        public List<Element> toRemove;
+        public EvaluateBuildersSingleVisitor(
+                Element root,
+                AbstractBuild<?, ?> build,
+                BuildListener listener){
+            this.root = root;
+            this.build = build;
+            this.listener = listener;
+            this.toAdd = new ArrayList<Element>();
+            this.toRemove = new ArrayList<Element>();
+        }
+
+        @Override
+        public void visit(Element node) {
+            String n = node.getName();
+            if (n.equals("condition") && node.attribute("plugin") != null &&
+                GeneratorRun.allParametersAreResolved(node)){
+                // convert this chunk of xml config to a file
+                InputStream is;
+                try {
+                    is = new ByteArrayInputStream(
+                                               node.asXML().getBytes("UTF-8"));
+                    XStream2 xs = new XStream2();
+                    RunCondition rc = (RunCondition) xs.fromXML(is);
+                    if(rc.runPerform(this.build, listener)){
+                        Element builder =
+                            (Element)this.root.selectSingleNode("buildStep");
+                        Element ne = builder.createCopy();
+                        ne.setName(ne.attributeValue("class"));
+                        ne.attribute("class").detach();
+                        this.toAdd.add(ne);
+                    }
+                    this.toRemove.add(this.root);
+                } catch (UnsupportedEncodingException e) {
+                } catch (FileNotFoundException e) {
+                } catch (IOException e) {
+                } catch (Exception e) {
+                }
+            }
+        }
+    }
+
+    class EvaluateBuildersMultiVisitor extends VisitorSupport {
+        private final Element root;
+        private final AbstractBuild<?, ?> build;
+        private final BuildListener listener;
+        public List<Element> toAdd;
+        public List<Element> toRemove;
+        public EvaluateBuildersMultiVisitor(
+                Element root,
+                AbstractBuild<?, ?> build,
+                BuildListener listener){
+            this.root = root;
+            this.build = build;
+            this.listener = listener;
+            this.toAdd = new ArrayList<Element>();
+            this.toRemove = new ArrayList<Element>();
+        }
+
+        @Override
+        public void visit(Element node) {
+            String n = node.getName();
+            if (n.equals("runCondition") && node.attribute("plugin") != null &&
+                GeneratorRun.allParametersAreResolved(node)){
+                try {
+                    InputStream is = new ByteArrayInputStream(
+                                               node.asXML().getBytes("UTF-8"));
+                    XStream2 xs = new XStream2();
+                    RunCondition rc = (RunCondition) xs.fromXML(is);
+                    if(rc.runPerform(this.build, listener)){
+                        Element broot = (Element)this.root.selectSingleNode(
+                                                      "conditionalbuilders");
+                        if (broot != null){
+                            List builders = broot.elements();
+                            for (Iterator i = builders.iterator();
+                                                                i.hasNext();) {
+                                Element b = (Element) i.next();
+                                Element ne = b.createCopy();
+                                this.toAdd.add(ne);
+                            }
+                        }
+                    }
+                    this.toRemove.add(this.root);
+                } catch (UnsupportedEncodingException e) {
+                } catch (FileNotFoundException e) {
+                } catch (IOException e) {
+                } catch (Exception e) {
+                }
+            }
+        }
+    }
+
+
+    class EvaluatePublishersVisitor extends VisitorSupport {
+        private final Element root;
+        private final AbstractBuild<?, ?> build;
+        private final BuildListener listener;
+        public List<Element> toAdd;
+        public List<Element> toRemove;
+        public EvaluatePublishersVisitor(
+                Element root,
+                AbstractBuild<?, ?> build,
+                BuildListener listener){
+            this.root = root;
+            this.build = build;
+            this.listener = listener;
+            this.toAdd = new ArrayList<Element>();
+            this.toRemove = new ArrayList<Element>();
+        }
+
+        @Override
+        public void visit(Element node) {
+            String n = node.getName();
+            if (n.equals("condition") && node.attribute("plugin") != null &&
+                GeneratorRun.allParametersAreResolved(node)){
+                // convert this chunk of xml config to a file
+                InputStream is;
+                try {
+                    is = new ByteArrayInputStream(
+                                               node.asXML().getBytes("UTF-8"));
+                    XStream2 xs = new XStream2();
+                    RunCondition rc = (RunCondition) xs.fromXML(is);
+                    if(rc.runPerform(this.build, listener)){
+                        Element builder =
+                            (Element)this.root.selectSingleNode("publisher");
+                        Element ne = builder.createCopy();
+                        ne.setName(ne.attributeValue("class"));
+                        ne.attribute("class").detach();
+                        this.toAdd.add(ne);
+                    }
+                    this.toRemove.add(this.root);
+                } catch (UnsupportedEncodingException e) {
+                } catch (FileNotFoundException e) {
+                } catch (IOException e) {
+                } catch (Exception e) {
+                }
             }
         }
     }

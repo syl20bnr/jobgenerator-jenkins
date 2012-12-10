@@ -22,7 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-package org.jenkinsci.plugins.jobgenerator;
+package org.jenkinsci.plugins.jobgenerator.parameterizedtrigger;
 
 import hudson.EnvVars;
 import hudson.Extension;
@@ -31,7 +31,6 @@ import hudson.model.Action;
 import hudson.model.Descriptor;
 import hudson.model.ParameterValue;
 import hudson.model.ParametersAction;
-import hudson.model.StringParameterValue;
 import hudson.model.TaskListener;
 import hudson.plugins.parameterizedtrigger.AbstractBuildParameters;
 
@@ -42,7 +41,10 @@ import java.util.Map;
 import java.util.Properties;
 
 import org.apache.tools.ant.filters.StringInputStream;
+
 import org.kohsuke.stapler.DataBoundConstructor;
+
+import org.jenkinsci.plugins.jobgenerator.parameters.*;
 
 /**
  * Default Generator Build Parameter which is a key value.
@@ -76,7 +78,7 @@ public class GeneratorKeyValueBuildParameters extends AbstractBuildParameters {
         return properties;
     }
 
-    @Extension
+    @Extension(optional = true)
     public static class DescriptorImpl extends
             Descriptor<AbstractBuildParameters> {
         @Override

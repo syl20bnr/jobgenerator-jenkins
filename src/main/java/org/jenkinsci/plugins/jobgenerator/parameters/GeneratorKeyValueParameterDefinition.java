@@ -22,7 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-package org.jenkinsci.plugins.jobgenerator;
+package org.jenkinsci.plugins.jobgenerator.parameters;
 
 import hudson.Extension;
 import hudson.model.*;

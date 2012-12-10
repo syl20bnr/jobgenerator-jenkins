@@ -22,7 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
  */
 
-package org.jenkinsci.plugins.jobgenerator;
+package org.jenkinsci.plugins.jobgenerator.parameters;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -44,6 +44,8 @@ import org.kohsuke.stapler.StaplerRequest;
 import org.kohsuke.stapler.StaplerResponse;
 
 import hudson.model.*;
+
+import org.jenkinsci.plugins.jobgenerator.JobGenerator;
 
 /**
  * Wrap Jenkins ParametersDefinitionProperty to be able to display its own
