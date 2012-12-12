@@ -99,12 +99,28 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
     }
 
     public static String expand(String s, List<ParametersAction> params) {
+        // check existenz of variables to replace
+        boolean proceed = false;
         for (ParametersAction p : params) {
             List<ParameterValue> values = p.getParameters();
             for (ParameterValue v : values) {
-                s = GeneratorRun.expand(s, v.getName(), 
-                                  ((GeneratorKeyValueParameterValue) v).value);
+                String decorated = "${" + v.getName() + "}";
+                if (s.contains(decorated)) {
+                    proceed = true;
+                    break;
+                }
             }
+        }
+        if (proceed){
+            for (ParametersAction p : params) {
+                List<ParameterValue> values = p.getParameters();
+                for (ParameterValue v : values) {
+                    s = GeneratorRun.expand(s, v.getName(), 
+                                  ((GeneratorKeyValueParameterValue) v).value);
+                }
+            }
+            // replace nested variables
+            s = expand(s, params);
         }
         return s;
     }
