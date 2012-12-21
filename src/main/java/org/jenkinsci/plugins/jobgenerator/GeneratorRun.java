@@ -157,6 +157,36 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
         return true;
     }
 
+    public static boolean isEvaluationSupported(Element root){
+        // TODO need to find a better way to detect if we can evaluate the
+        // expression for a given conditionnal class
+        List<String> notSupportedClasses = new ArrayList<String>();
+        notSupportedClasses.add("AlwaysRun");
+        notSupportedClasses.add("NeverRun");
+        notSupportedClasses.add("CauseCondition");
+        notSupportedClasses.add("StatusCondition");
+        notSupportedClasses.add("DayCondition");
+        notSupportedClasses.add("ShellCondition");
+        notSupportedClasses.add("BatchFileCondition");
+        notSupportedClasses.add("FileExistsCondition");
+        notSupportedClasses.add("FilesMatchCondition");
+        notSupportedClasses.add("TimeCondition");
+        if(root.attribute("class") != null){
+            String name = root.attributeValue("class");
+            for(String nname: notSupportedClasses){
+                if(name.contains(nname)){
+                    return false;
+                }
+            }
+        }
+        List children = root.elements();
+        for (Iterator i = children.iterator(); i.hasNext();) {
+            Element e = (Element) i.next();
+            return isEvaluationSupported(e);
+        }
+        return true;
+    }
+
     public String id(Run run) throws UnsupportedEncodingException {
         return URLEncoder.encode(run.getParent().getFullDisplayName()
                                          + run.getNumber(),
@@ -566,6 +596,7 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
         public void visit(Element node) {
             String n = node.getName();
             if (n.equals("condition") && node.attribute("plugin") != null &&
+                GeneratorRun.isEvaluationSupported(node) &&
                 GeneratorRun.allParametersAreResolved(node)){
                 // convert this chunk of xml config to a file
                 InputStream is;
@@ -613,6 +644,7 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
         public void visit(Element node) {
             String n = node.getName();
             if (n.equals("runCondition") && node.attribute("plugin") != null &&
+                GeneratorRun.isEvaluationSupported(node) &&
                 GeneratorRun.allParametersAreResolved(node)){
                 try {
                     InputStream is = new ByteArrayInputStream(
@@ -664,6 +696,7 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
         public void visit(Element node) {
             String n = node.getName();
             if (n.equals("condition") && node.attribute("plugin") != null &&
+                GeneratorRun.isEvaluationSupported(node) &&
                 GeneratorRun.allParametersAreResolved(node)){
                 // convert this chunk of xml config to a file
                 InputStream is;
