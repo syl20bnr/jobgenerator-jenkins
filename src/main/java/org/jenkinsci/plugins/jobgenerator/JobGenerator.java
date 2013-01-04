@@ -72,7 +72,6 @@ import org.jenkinsci.plugins.jobgenerator.parameters.*;
 public class JobGenerator extends Project<JobGenerator, GeneratorRun>
                           implements TopLevelItem, FlyweightTask, SCMedItem {
 
-    private transient boolean overwrite = false;
     private transient boolean delete = false;
     private transient boolean processAll = false;
     private transient boolean initiator = false;
@@ -107,8 +106,8 @@ public class JobGenerator extends Project<JobGenerator, GeneratorRun>
     public <T extends JobProperty> T getProperty(Class<T> clazz) {
         T res = super.getProperty(clazz);
         if(ParametersDefinitionProperty.class == clazz){
-            GeneratorParametersDefinitionProperty topmost =
-                    (GeneratorParametersDefinitionProperty)
+            ParametersDefinitionProperty topmost =
+                    (ParametersDefinitionProperty)
                                   this.getTopMostParameterDefinitionProperty();
             if(res != null){
                 // wrap parameter definitions and merge with top most project
@@ -139,16 +138,18 @@ public class JobGenerator extends Project<JobGenerator, GeneratorRun>
             else if(topmost != null){
                 List<ParameterDefinition> lpd =
                                              topmost.getParameterDefinitions();
-                topmost.addGlobalParameters(lpd);
-                topmost.setOwner2(this);
-                res = (T) topmost;
+                GeneratorParametersDefinitionProperty newres =
+                    new GeneratorParametersDefinitionProperty(topmost, this);
+                newres.addGlobalParameters(lpd);
+                newres.setOwner2(this);
+                res = (T) newres;
             }
         }
         return res;
     }
 
     @Override
-    public Label getAssignedLabel() { 
+    public Label getAssignedLabel() {
         return new LabelAtom("master");
     }
 
@@ -179,7 +180,7 @@ public class JobGenerator extends Project<JobGenerator, GeneratorRun>
     }
 
     @Override
-    protected void submit(StaplerRequest req, StaplerResponse rsp) 
+    protected void submit(StaplerRequest req, StaplerResponse rsp)
             throws IOException, ServletException, FormException {
         super.submit(req, rsp);
         JSONObject json = req.getSubmittedForm();
@@ -194,7 +195,7 @@ public class JobGenerator extends Project<JobGenerator, GeneratorRun>
     }
 
     @Extension
-    public static final JobGeneratorDescriptor DESCRIPTOR = 
+    public static final JobGeneratorDescriptor DESCRIPTOR =
                                                   new JobGeneratorDescriptor();
 
     public JobGeneratorDescriptor getDescriptor() {
@@ -253,12 +254,6 @@ public class JobGenerator extends Project<JobGenerator, GeneratorRun>
     public void setProcessAll(boolean check){
         this.processAll = check;
     }
-    public boolean getOverwrite(){
-        return this.overwrite;
-    }
-    public void setOverwrite(boolean check){
-        this.overwrite = check;
-    }
     public boolean getDelete(){
         return this.delete;
     }
@@ -267,7 +262,6 @@ public class JobGenerator extends Project<JobGenerator, GeneratorRun>
     }
 
     public void copyOptions(JobGenerator p){
-        p.setOverwrite(this.getOverwrite());
         p.setDelete(this.getDelete());
         p.setProcessAll(this.getProcessAll());
     }

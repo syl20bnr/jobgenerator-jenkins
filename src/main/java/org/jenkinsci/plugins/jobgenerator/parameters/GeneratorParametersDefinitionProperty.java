@@ -50,12 +50,12 @@ import org.jenkinsci.plugins.jobgenerator.JobGenerator;
 /**
  * Wrap Jenkins ParametersDefinitionProperty to be able to display its own
  * view.
- * 
+ *
  * @author <a href="mailto:sylvain.benner@gmail.com">Sylvain Benner</a>
  */
 @ExportedBean(defaultVisibility=2)
 public class GeneratorParametersDefinitionProperty
-        extends ParametersDefinitionProperty 
+        extends ParametersDefinitionProperty
         implements Action {
 
     private static final Logger LOGGER = Logger.getLogger(
@@ -69,7 +69,7 @@ public class GeneratorParametersDefinitionProperty
             ParametersDefinitionProperty property,
             JobGenerator project) {
         this.owner = project;
-        this.generatorParameterDefinitions = 
+        this.generatorParameterDefinitions =
                                           new ArrayList<ParameterDefinition>();
         List<ParameterDefinition> lpd = property.getParameterDefinitions();
         for(ParameterDefinition pd: lpd){
@@ -126,16 +126,14 @@ public class GeneratorParametersDefinitionProperty
                 String name = jo.getString("name");
                 if(this.getParameterDefinition(name) == null){
                     String value = jo.getString("value");
-                    GeneratorKeyValueParameterDefinition pdef = 
+                    GeneratorKeyValueParameterDefinition pdef =
                         new GeneratorKeyValueParameterDefinition(name,
                                                                  value, "");
                     this.generatorParameterDefinitions.add(pdef);
                 }
             }
             JobGenerator p = (JobGenerator)this.getOwner();
-            JSONObject o = json.getJSONObject("overwrite");
-            p.setOverwrite(!o.isNullObject());
-            o = json.getJSONObject("delete");
+            JSONObject o = json.getJSONObject("delete");
             p.setDelete(false);
             if(!o.isNullObject()){
                 p.setDelete(o.getBoolean("confirm"));

@@ -60,7 +60,6 @@ import java.util.logging.Logger;
 import jenkins.model.Jenkins;
 
 import org.apache.tools.ant.filters.StringInputStream;
-import org.dom4j.Attribute;
 import org.dom4j.Document;
 import org.dom4j.Element;
 import org.dom4j.Node;
@@ -76,7 +75,7 @@ import org.jenkinsci.plugins.jobgenerator.parameters.*;
 /**
  * Generates a configured job by copying this job config.xml and replacing
  * generator parameters with values provided by the user at build time.
- * 
+ *
  * @author <a href="mailto:sylvain.benner@gmail.com">Sylvain Benner</a>
  */
 @SuppressWarnings("rawtypes")
@@ -115,7 +114,7 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
             for (ParametersAction p : params) {
                 List<ParameterValue> values = p.getParameters();
                 for (ParameterValue v : values) {
-                    s = GeneratorRun.expand(s, v.getName(), 
+                    s = GeneratorRun.expand(s, v.getName(),
                                   ((GeneratorKeyValueParameterValue) v).value);
                 }
             }
@@ -227,13 +226,6 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                 }
             }
             else{
-                if(Jenkins.getInstance().getItem(expName) != null &&
-                   !job.getOverwrite()){
-                    this.listener.error("The job %s already exists and the " +
-                                        "overwrite option was not enabled.",
-                                        expName);
-                    return Result.FAILURE;
-                }
                 String expDispName = expand(
                         job.getGeneratedDisplayJobName(), params);
                 File d = new File(job.getRootDir() +
@@ -454,7 +446,7 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                     if(JobGenerator.class.isInstance(i)){
                         listener.error("Generated Project Name corresponds " +
                                        "to a the Job Generator " +
-                                       i.getName() + 
+                                       i.getName() +
                                        ". Generation has been aborted to " +
                                        "prevent any loss of data.");
                 return false;
@@ -488,7 +480,7 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
         public UpdateProjectReferencesVisitor(
                 List<AbstractProject> downstreamprojects,
                 List<ParametersAction> params){
-            this.upordownstreamprojects = 
+            this.upordownstreamprojects =
                                         new ArrayList<JobGenerator>();
             for(AbstractProject p: downstreamprojects){
                 if(JobGenerator.class.isInstance(p)){
