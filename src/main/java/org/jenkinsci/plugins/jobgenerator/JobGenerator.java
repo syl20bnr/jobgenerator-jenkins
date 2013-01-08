@@ -73,7 +73,7 @@ public class JobGenerator extends Project<JobGenerator, GeneratorRun>
                           implements TopLevelItem, FlyweightTask, SCMedItem {
 
     private transient boolean delete = false;
-    private transient boolean processAll = false;
+    private transient boolean processThisJobOnly = false;
     private transient boolean initiator = false;
     private String generatedJobName = "";
     private String generatedDisplayJobName = "";
@@ -248,11 +248,11 @@ public class JobGenerator extends Project<JobGenerator, GeneratorRun>
         this.generatedDisplayJobName = name;
     }
 
-    public boolean getProcessAll(){
-        return this.processAll;
+    public boolean getProcessThisJobOnly(){
+        return this.processThisJobOnly;
     }
-    public void setProcessAll(boolean check){
-        this.processAll = check;
+    public void setProcessThisJobOnly(boolean check){
+        this.processThisJobOnly = check;
     }
     public boolean getDelete(){
         return this.delete;
@@ -263,7 +263,7 @@ public class JobGenerator extends Project<JobGenerator, GeneratorRun>
 
     public void copyOptions(JobGenerator p){
         p.setDelete(this.getDelete());
-        p.setProcessAll(this.getProcessAll());
+        p.setProcessThisJobOnly(this.getProcessThisJobOnly());
     }
 
     public static class JobGeneratorDescriptor

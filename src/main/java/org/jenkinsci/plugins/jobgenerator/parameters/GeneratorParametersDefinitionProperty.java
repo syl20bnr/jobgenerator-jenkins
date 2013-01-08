@@ -138,8 +138,8 @@ public class GeneratorParametersDefinitionProperty
             if(!o.isNullObject()){
                 p.setDelete(o.getBoolean("confirm"));
             }
-            o = json.getJSONObject("processall");
-            p.setProcessAll(!o.isNullObject());
+            o = json.getJSONObject("processThisJobOnly");
+            p.setProcessThisJobOnly(!o.isNullObject());
         }
         super._doBuild(req, rsp, new TimeDuration(0));
     }

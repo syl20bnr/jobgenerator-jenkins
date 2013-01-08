@@ -368,7 +368,7 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
         @Override
         public void cleanUp(BuildListener listener) throws Exception {
             JobGenerator job = getJobGenerator();
-            if(!job.getProcessAll()){
+            if(job.getProcessThisJobOnly()){
                 return;
             }
             List<ParametersAction> lpa = getBuild().getActions(

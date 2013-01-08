@@ -68,7 +68,8 @@ THE SOFTWARE.
           </f:section>
         </j:if>
         <f:section title="${%Options}">
-          <f:optionalBlock name="processall" title="${%Process downstream jobs}" checked="true" help="/plugin/jobgenerator/help-processall.html"/>
+          <f:optionalBlock name="processthisjob" title="${%Process this
+          job only}" checked="false" help="/plugin/jobgenerator/help-processthisjob.html"/>
           <f:optionalBlock name="delete" title="${%Delete jobs}" checked="false" help="/plugin/jobgenerator/help-delete.html">
             <f:nested>
               <font color="red"><strong>WARNING!! You are about to delete one or several jobs.<br/>Please confirm your decision.</strong></font>
