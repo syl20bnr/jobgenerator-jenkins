@@ -60,7 +60,6 @@ import java.util.logging.Logger;
 import jenkins.model.Jenkins;
 
 import org.apache.tools.ant.filters.StringInputStream;
-import org.dom4j.Attribute;
 import org.dom4j.Document;
 import org.dom4j.Element;
 import org.dom4j.Node;
@@ -76,7 +75,7 @@ import org.jenkinsci.plugins.jobgenerator.parameters.*;
 /**
  * Generates a configured job by copying this job config.xml and replacing
  * generator parameters with values provided by the user at build time.
- * 
+ *
  * @author <a href="mailto:sylvain.benner@gmail.com">Sylvain Benner</a>
  */
 @SuppressWarnings("rawtypes")
@@ -99,12 +98,28 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
     }
 
     public static String expand(String s, List<ParametersAction> params) {
+        // check existenz of variables to replace
+        boolean proceed = false;
         for (ParametersAction p : params) {
             List<ParameterValue> values = p.getParameters();
             for (ParameterValue v : values) {
-                s = GeneratorRun.expand(s, v.getName(), 
-                                  ((GeneratorKeyValueParameterValue) v).value);
+                String decorated = "${" + v.getName() + "}";
+                if (s.contains(decorated)) {
+                    proceed = true;
+                    break;
+                }
             }
+        }
+        if (proceed){
+            for (ParametersAction p : params) {
+                List<ParameterValue> values = p.getParameters();
+                for (ParameterValue v : values) {
+                    s = GeneratorRun.expand(s, v.getName(),
+                                  ((GeneratorKeyValueParameterValue) v).value);
+                }
+            }
+            // replace nested variables
+            s = expand(s, params);
         }
         return s;
     }
@@ -141,6 +156,36 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
         return true;
     }
 
+    public static boolean isEvaluationSupported(Element root){
+        // TODO need to find a better way to detect if we can evaluate the
+        // expression for a given conditionnal class
+        List<String> notSupportedClasses = new ArrayList<String>();
+        notSupportedClasses.add("AlwaysRun");
+        notSupportedClasses.add("NeverRun");
+        notSupportedClasses.add("CauseCondition");
+        notSupportedClasses.add("StatusCondition");
+        notSupportedClasses.add("DayCondition");
+        notSupportedClasses.add("ShellCondition");
+        notSupportedClasses.add("BatchFileCondition");
+        notSupportedClasses.add("FileExistsCondition");
+        notSupportedClasses.add("FilesMatchCondition");
+        notSupportedClasses.add("TimeCondition");
+        if(root.attribute("class") != null){
+            String name = root.attributeValue("class");
+            for(String nname: notSupportedClasses){
+                if(name.contains(nname)){
+                    return false;
+                }
+            }
+        }
+        List children = root.elements();
+        for (Iterator i = children.iterator(); i.hasNext();) {
+            Element e = (Element) i.next();
+            return isEvaluationSupported(e);
+        }
+        return true;
+    }
+
     public String id(Run run) throws UnsupportedEncodingException {
         return URLEncoder.encode(run.getParent().getFullDisplayName()
                                          + run.getNumber(),
@@ -169,25 +214,13 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                                           hudson.model.ParametersAction.class);
             String expName = getExpandedJobName(job, params);
             if(job.getDelete()){
-                TopLevelItem i = Jenkins.getInstance().getItem(expName);
-                if(i != null){
-                    i.delete();
-                    LOGGER.info(String.format("Deleted job %s", expName));
-                }
-                else{
-                    LOGGER.info(String.format("Job %s does not exist. " +
-                                              "Skip delete operation.",
-                                              expName));
-                }
+                List<String> jobs = new ArrayList<String>();
+                this.deleteJobs(job, !job.getProcessThisJobOnly(), jobs);
+                // save deleted job name
+                DeletedJobBuildAction action = new DeletedJobBuildAction(jobs);
+                getBuild().addAction(action);
             }
             else{
-                if(Jenkins.getInstance().getItem(expName) != null &&
-                   !job.getOverwrite()){
-                    this.listener.error("The job %s already exists and the " +
-                                        "overwrite option was not enabled.",
-                                        expName);
-                    return Result.FAILURE;
-                }
                 String expDispName = expand(
                         job.getGeneratedDisplayJobName(), params);
                 File d = new File(job.getRootDir() +
@@ -330,7 +363,7 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
         @Override
         public void cleanUp(BuildListener listener) throws Exception {
             JobGenerator job = getJobGenerator();
-            if(!job.getProcessAll()){
+            if(job.getProcessThisJobOnly() || job.getDelete()){
                 return;
             }
             List<ParametersAction> lpa = getBuild().getActions(
@@ -372,6 +405,76 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
             }
         }
 
+        private void deleteJobs(JobGenerator job, boolean deleteChildren,
+                                List<String> deletedJobs){
+            int n = job.getLastSuccessfulBuild().getNumber();
+            this.deleteJob(job, n, deletedJobs);
+            if(!deleteChildren){
+                return;
+            }
+            // delete children
+            BuildTrigger bt = job.getPublishersList().get(BuildTrigger.class);
+            if (bt != null) {
+                // parameterized build trigger
+                for (ListIterator<BuildTriggerConfig> btc =
+                        bt.getConfigs().listIterator(); btc.hasNext();) {
+                    BuildTriggerConfig c = btc.next();
+                    for (AbstractProject p : c.getProjectList(job.getParent(),
+                                                              null)) {
+                        if(JobGenerator.class.isInstance(p)){
+                            this.deleteJobs((JobGenerator) p, deleteChildren,
+                                            deletedJobs);
+                        }
+                    }
+                }
+            }
+            else{
+                // standard Jenkins dependencies
+                for(AbstractProject dp: job.getDownstreamProjects()){
+                    if(JobGenerator.class.isInstance(dp)){
+                        this.deleteJobs((JobGenerator) dp, deleteChildren,
+                                        deletedJobs);
+                    }
+                }
+            }
+        }
+
+        private void deleteJob(JobGenerator job, int buildnum,
+                               List<String> deletedJobs){
+            GeneratedJobBuildAction a =
+                job.getBuildByNumber(buildnum).getAction(
+                                                GeneratedJobBuildAction.class);
+            if(a == null){
+                this.deleteJobFromPreviousBuild(job, buildnum, deletedJobs);
+            }
+            String genjobn = a.getJob();
+            TopLevelItem i = Jenkins.getInstance().getItem(genjobn);
+            if(i != null){
+                try {
+					i.delete();
+					deletedJobs.add(genjobn);
+				}
+                catch (Exception e) {
+	                LOGGER.severe(String.format("Error deleting job %s",
+	                	                    	genjobn));
+				}
+                LOGGER.info(String.format("Deleted job %s", genjobn));
+            }
+            else{
+                this.deleteJobFromPreviousBuild(job, buildnum, deletedJobs);
+            }
+        }
+        
+        private void deleteJobFromPreviousBuild(JobGenerator job,
+                                                int buildnum,
+                                                List<String> deletedJobs){
+            buildnum = buildnum - 1;
+            LOGGER.info("Job does not exist. Trying previous build.");
+            if (buildnum > 0){
+                this.deleteJob(job, buildnum, deletedJobs);
+            }
+        }
+
         private void removeNodeIfNoChild(Node root, String elem) {
             List list = root.selectNodes("//" + elem);
             for (Iterator iter = list.iterator(); iter.hasNext(); ) {
@@ -408,7 +511,7 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                     if(JobGenerator.class.isInstance(i)){
                         listener.error("Generated Project Name corresponds " +
                                        "to a the Job Generator " +
-                                       i.getName() + 
+                                       i.getName() +
                                        ". Generation has been aborted to " +
                                        "prevent any loss of data.");
                 return false;
@@ -442,7 +545,7 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
         public UpdateProjectReferencesVisitor(
                 List<AbstractProject> downstreamprojects,
                 List<ParametersAction> params){
-            this.upordownstreamprojects = 
+            this.upordownstreamprojects =
                                         new ArrayList<JobGenerator>();
             for(AbstractProject p: downstreamprojects){
                 if(JobGenerator.class.isInstance(p)){
@@ -550,6 +653,7 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
         public void visit(Element node) {
             String n = node.getName();
             if (n.equals("condition") && node.attribute("plugin") != null &&
+                GeneratorRun.isEvaluationSupported(node) &&
                 GeneratorRun.allParametersAreResolved(node)){
                 // convert this chunk of xml config to a file
                 InputStream is;
@@ -597,6 +701,7 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
         public void visit(Element node) {
             String n = node.getName();
             if (n.equals("runCondition") && node.attribute("plugin") != null &&
+                GeneratorRun.isEvaluationSupported(node) &&
                 GeneratorRun.allParametersAreResolved(node)){
                 try {
                     InputStream is = new ByteArrayInputStream(
@@ -648,6 +753,7 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
         public void visit(Element node) {
             String n = node.getName();
             if (n.equals("condition") && node.attribute("plugin") != null &&
+                GeneratorRun.isEvaluationSupported(node) &&
                 GeneratorRun.allParametersAreResolved(node)){
                 // convert this chunk of xml config to a file
                 InputStream is;
