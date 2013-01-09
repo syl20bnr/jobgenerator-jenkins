@@ -214,16 +214,11 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                                           hudson.model.ParametersAction.class);
             String expName = getExpandedJobName(job, params);
             if(job.getDelete()){
-                TopLevelItem i = Jenkins.getInstance().getItem(expName);
-                if(i != null){
-                    i.delete();
-                    LOGGER.info(String.format("Deleted job %s", expName));
-                }
-                else{
-                    LOGGER.info(String.format("Job %s does not exist. " +
-                                              "Skip delete operation.",
-                                              expName));
-                }
+                List<String> jobs = new ArrayList<String>();
+                this.deleteJobs(job, !job.getProcessThisJobOnly(), jobs);
+                // save deleted job name
+                DeletedJobBuildAction action = new DeletedJobBuildAction(jobs);
+                getBuild().addAction(action);
             }
             else{
                 String expDispName = expand(
@@ -368,7 +363,7 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
         @Override
         public void cleanUp(BuildListener listener) throws Exception {
             JobGenerator job = getJobGenerator();
-            if(job.getProcessThisJobOnly()){
+            if(job.getProcessThisJobOnly() || job.getDelete()){
                 return;
             }
             List<ParametersAction> lpa = getBuild().getActions(
@@ -407,6 +402,76 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                     job.copyOptions((JobGenerator) dp);
                     dp.scheduleBuild2(0, cause, lpa);
                 }
+            }
+        }
+
+        private void deleteJobs(JobGenerator job, boolean deleteChildren,
+                                List<String> deletedJobs){
+            int n = job.getLastSuccessfulBuild().getNumber();
+            this.deleteJob(job, n, deletedJobs);
+            if(!deleteChildren){
+                return;
+            }
+            // delete children
+            BuildTrigger bt = job.getPublishersList().get(BuildTrigger.class);
+            if (bt != null) {
+                // parameterized build trigger
+                for (ListIterator<BuildTriggerConfig> btc =
+                        bt.getConfigs().listIterator(); btc.hasNext();) {
+                    BuildTriggerConfig c = btc.next();
+                    for (AbstractProject p : c.getProjectList(job.getParent(),
+                                                              null)) {
+                        if(JobGenerator.class.isInstance(p)){
+                            this.deleteJobs((JobGenerator) p, deleteChildren,
+                                            deletedJobs);
+                        }
+                    }
+                }
+            }
+            else{
+                // standard Jenkins dependencies
+                for(AbstractProject dp: job.getDownstreamProjects()){
+                    if(JobGenerator.class.isInstance(dp)){
+                        this.deleteJobs((JobGenerator) dp, deleteChildren,
+                                        deletedJobs);
+                    }
+                }
+            }
+        }
+
+        private void deleteJob(JobGenerator job, int buildnum,
+                               List<String> deletedJobs){
+            GeneratedJobBuildAction a =
+                job.getBuildByNumber(buildnum).getAction(
+                                                GeneratedJobBuildAction.class);
+            if(a == null){
+                this.deleteJobFromPreviousBuild(job, buildnum, deletedJobs);
+            }
+            String genjobn = a.getJob();
+            TopLevelItem i = Jenkins.getInstance().getItem(genjobn);
+            if(i != null){
+                try {
+					i.delete();
+					deletedJobs.add(genjobn);
+				}
+                catch (Exception e) {
+	                LOGGER.severe(String.format("Error deleting job %s",
+	                	                    	genjobn));
+				}
+                LOGGER.info(String.format("Deleted job %s", genjobn));
+            }
+            else{
+                this.deleteJobFromPreviousBuild(job, buildnum, deletedJobs);
+            }
+        }
+        
+        private void deleteJobFromPreviousBuild(JobGenerator job,
+                                                int buildnum,
+                                                List<String> deletedJobs){
+            buildnum = buildnum - 1;
+            LOGGER.info("Job does not exist. Trying previous build.");
+            if (buildnum > 0){
+                this.deleteJob(job, buildnum, deletedJobs);
             }
         }
 
