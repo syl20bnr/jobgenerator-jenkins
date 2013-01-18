@@ -32,6 +32,7 @@ import java.util.logging.Logger;
 
 import javax.servlet.ServletException;
 
+import jenkins.model.Jenkins;
 import jenkins.util.TimeDuration;
 
 import net.sf.json.JSONArray;
@@ -39,6 +40,7 @@ import net.sf.json.JSONObject;
 
 import org.kohsuke.stapler.export.Exported;
 import org.kohsuke.stapler.export.ExportedBean;
+import org.kohsuke.stapler.export.Flavor;
 import org.kohsuke.stapler.QueryParameter;
 import org.kohsuke.stapler.StaplerRequest;
 import org.kohsuke.stapler.StaplerResponse;
@@ -142,6 +144,44 @@ public class GeneratorParametersDefinitionProperty
             p.setProcessThisJobOnly(!o.isNullObject());
         }
         super._doBuild(req, rsp, new TimeDuration(0));
+    }
+
+    private boolean requestWantsJson(StaplerRequest req) {
+        String a = req.getHeader("Accept");
+        if (a==null)    return false;
+        return !a.contains("text/html") && a.contains("application/json");
+    }
+
+    @Override
+    public void buildWithParameters(
+            StaplerRequest req,
+            StaplerResponse rsp,
+            TimeDuration delay) throws IOException, ServletException {
+        List<ParameterValue> values = new ArrayList<ParameterValue>();
+        for (ParameterDefinition d : this.generatorParameterDefinitions) {
+            GeneratorKeyValueParameterValue value =
+                          (GeneratorKeyValueParameterValue) d.createValue(req);
+            if (value != null) {
+                values.add(value);
+            }
+        }
+        if (delay == null)
+            delay = new TimeDuration(this.getOwner().getQuietPeriod());
+
+        String causeText = req.getParameter("cause");
+        Cause cause = new Cause.RemoteCause(req.getRemoteAddr(), causeText);
+
+        Jenkins.getInstance().getQueue().schedule(
+                this.getOwner(), delay.getTime(),
+                new ParametersAction(values), new CauseAction(cause));
+
+        if (requestWantsJson(req)) {
+            rsp.setContentType("application/json");
+            rsp.serveExposedBean(req, owner, Flavor.JSON);
+        } else {
+            // send the user back to the job top page.
+            rsp.sendRedirect(".");
+        }
     }
 
     @Exported
