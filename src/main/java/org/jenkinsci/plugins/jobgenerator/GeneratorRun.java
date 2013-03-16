@@ -36,8 +36,10 @@ import hudson.model.Cause;
 import hudson.model.ParametersAction;
 import hudson.model.Run;
 import hudson.plugins.parameterizedtrigger.AbstractBuildParameters;
+import hudson.plugins.parameterizedtrigger.BlockableBuildTriggerConfig;
 import hudson.plugins.parameterizedtrigger.BuildTrigger;
 import hudson.plugins.parameterizedtrigger.BuildTriggerConfig;
+import hudson.plugins.parameterizedtrigger.TriggerBuilder;
 import hudson.util.XStream2;
 
 import java.io.ByteArrayInputStream;
@@ -261,6 +263,9 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                 v = new UpdateProjectReferencesVisitor(
                             job.getDownstreamProjects(), params);
                 doc.accept(v);
+                v = new UpdateProjectReferencesVisitor(
+                            this.getSubProjects(), params);
+                doc.accept(v);
                 // Remove info specific to Job Generator
                 v = new GatherElementsToRemoveVisitor();
                 doc.accept(v);
@@ -374,9 +379,9 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
             }
             List<ParametersAction> lpa = getBuild().getActions(
                                           hudson.model.ParametersAction.class);
+            // parameterized build trigger build trigger
             BuildTrigger bt = job.getPublishersList().get(BuildTrigger.class);
             if (bt != null) {
-                // parameterized build trigger
                 for (ListIterator<BuildTriggerConfig> btc =
                         bt.getConfigs().listIterator(); btc.hasNext();) {
                     BuildTriggerConfig c = btc.next();
@@ -400,8 +405,35 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                     }
                 }
             }
-            else{
-                // standard Jenkins dependencies
+            // parameterized build trigger build step
+            TriggerBuilder tb = job.getBuildersList().get(TriggerBuilder.class);
+            if (tb != null) {
+                for (ListIterator<BlockableBuildTriggerConfig> tbc =
+                        tb.getConfigs().listIterator(); tbc.hasNext();) {
+                    BuildTriggerConfig c = tbc.next();
+                    for (AbstractProject p : c.getProjectList(job.getParent(),
+                                                              null)) {
+                        List<ParametersAction> importParams =
+                                             new ArrayList<ParametersAction>();
+                        importParams.addAll(lpa);
+                        List<AbstractBuildParameters> lbp = c.getConfigs();
+                        for(AbstractBuildParameters bp: lbp){
+                            if(bp.getClass().getSimpleName().equals(
+                                      "GeneratorKeyValueBuildParameters")){
+                                importParams.add((ParametersAction)
+                                    bp.getAction(GeneratorRun.this, listener));
+                            }
+                        }
+                        job.copyOptions((JobGenerator) p);
+                        Cause.UpstreamCause cause = new Cause.UpstreamCause(
+                                                                   getBuild());
+                        p.scheduleBuild2(0, cause, importParams);
+                    }
+                }
+            }
+            
+            // standard Jenkins dependencies
+            if(bt == null){
                 for(AbstractProject dp: job.getDownstreamProjects()){
                     Cause.UpstreamCause cause = new Cause.UpstreamCause(
                                                                    getBuild());
@@ -409,6 +441,23 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                     dp.scheduleBuild2(0, cause, lpa);
                 }
             }
+        }
+        
+        private List<AbstractProject> getSubProjects(){
+        	List<AbstractProject> result = new ArrayList<AbstractProject>();
+            JobGenerator job = getJobGenerator();
+            TriggerBuilder tb = job.getBuildersList().get(TriggerBuilder.class);
+            if (tb != null) {
+                for (ListIterator<BlockableBuildTriggerConfig> tbc =
+                        tb.getConfigs().listIterator(); tbc.hasNext();) {
+                    BuildTriggerConfig c = tbc.next();
+                    for (AbstractProject p : c.getProjectList(job.getParent(),
+                                                              null)) {
+                    	result.add(p);
+                    }
+                }
+            }
+            return result;
         }
 
         private void deleteJobs(JobGenerator job, boolean deleteChildren,
