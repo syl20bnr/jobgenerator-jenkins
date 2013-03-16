@@ -83,6 +83,8 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
 
     private static final Logger LOGGER = Logger.getLogger(
                                                  GeneratorRun.class.getName());
+    private static final char[] specialChars = {'\\', '/', ':', '*', '"', '<',
+    	                                        '>', '|'};
 
     public GeneratorRun(JobGenerator job, File buildDir)
             throws IOException {
@@ -134,7 +136,11 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
 
     public static String getExpandedJobName(JobGenerator p,
                                             List<ParametersAction> params){
-        return expand(p.getGeneratedJobName(), params);
+        String n = expand(p.getGeneratedJobName(), params);
+        for(char c: GeneratorRun.specialChars){
+	        n = n.replace(c, '_');
+        }
+        return n;
     }
 
     public static boolean allParametersAreResolved(Element root){
