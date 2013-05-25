@@ -26,16 +26,14 @@ package org.jenkinsci.plugins.jobgenerator;
 
 import hudson.Extension;
 import hudson.Launcher;
+import hudson.Util;
 import hudson.model.*;
 import hudson.model.Descriptor.FormException;
 import hudson.model.ParameterDefinition;
-import hudson.model.ParameterDefinition.ParameterDescriptor;
 import hudson.model.ParametersDefinitionProperty;
 import hudson.model.Queue.FlyweightTask;
 import hudson.model.labels.LabelAtom;
 import hudson.scm.PollingResult;
-import hudson.scm.NullSCM;
-import hudson.scm.SCM;
 import hudson.triggers.SCMTrigger.SCMTriggerCause;
 import hudson.triggers.TimerTrigger.TimerTriggerCause;
 import hudson.util.AlternativeUiTextProvider;
@@ -43,14 +41,10 @@ import hudson.util.FormValidation;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 import javax.servlet.ServletException;
 
-import jenkins.model.Jenkins;
 import jenkins.util.TimeDuration;
 
 import net.sf.json.JSONObject;
@@ -75,6 +69,7 @@ public class JobGenerator extends Project<JobGenerator, GeneratorRun>
     private transient boolean delete = false;
     private transient boolean processThisJobOnly = false;
     private transient boolean initiator = false;
+    private transient String customWorkspace = null;
     private String generatedJobName = "";
     private String generatedDisplayJobName = "";
 
@@ -83,6 +78,7 @@ public class JobGenerator extends Project<JobGenerator, GeneratorRun>
         super(parent, name);
     }
 
+    @Override
     public void doBuild(StaplerRequest req,
                         StaplerResponse rsp,
                         TimeDuration delay) throws IOException ,
@@ -184,13 +180,25 @@ public class JobGenerator extends Project<JobGenerator, GeneratorRun>
             throws IOException, ServletException, FormException {
         super.submit(req, rsp);
         JSONObject json = req.getSubmittedForm();
-        JSONObject o = json.getJSONObject(
-                                     "plugin-jobgenerator-GeneratedJobConfig");
-        if(o != null) {
-            String k = "generatedJobName";
-            if(o.has(k)){ this.generatedJobName = o.getString(k); }
-            k = "generatedDisplayJobName";
-            if(o.has(k)){ this.generatedDisplayJobName = o.getString(k); }
+        
+        String k = "plugin-jobgenerator-GeneratedJobConfig";
+        JSONObject o;
+        
+        if(json.has(k)){        
+            o = json.getJSONObject(k);
+            if(o != null) {
+                k = "generatedJobName";
+                if(o.has(k)){ this.generatedJobName = o.getString(k); }
+                k = "generatedDisplayJobName";
+                if(o.has(k)){ this.generatedDisplayJobName = o.getString(k); }            
+            }
+        }
+        
+        if(req.hasParameter("customWorkspace")) {
+            customWorkspace = Util.fixEmptyAndTrim(req.getParameter(
+            		                             "customWorkspace.directory"));
+        } else {
+            customWorkspace = null;
         }
     }
 
@@ -248,6 +256,14 @@ public class JobGenerator extends Project<JobGenerator, GeneratorRun>
         this.generatedDisplayJobName = name;
     }
 
+    public String getCustomWorkspace() {
+        return this.customWorkspace;
+    }
+
+    public void setCustomWorkspace(String customWorkspace) {
+        this.customWorkspace= Util.fixEmptyAndTrim(customWorkspace);
+    }
+
     public boolean getProcessThisJobOnly(){
         return this.processThisJobOnly;
     }
@@ -287,6 +303,15 @@ public class JobGenerator extends Project<JobGenerator, GeneratorRun>
                                             "generator name.");
             }
             return FormValidation.validateRequired(value);
+        }
+ 
+        public FormValidation doCheckCustomWorkspace(
+        		@QueryParameter(value="customWorkspace.directory") String customWorkspace){
+        	if(Util.fixEmptyAndTrim(customWorkspace)==null)
+        		return FormValidation.error(
+        				      Messages.JobGenerator_CustomWorkspaceEmpty());
+        	else
+        		return FormValidation.ok();
         }
 
         public String getDefaultEntriesPage(){
