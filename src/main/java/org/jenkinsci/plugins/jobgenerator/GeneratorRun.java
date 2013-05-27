@@ -40,6 +40,7 @@ import hudson.plugins.parameterizedtrigger.BlockableBuildTriggerConfig;
 import hudson.plugins.parameterizedtrigger.BuildTrigger;
 import hudson.plugins.parameterizedtrigger.BuildTriggerConfig;
 import hudson.plugins.parameterizedtrigger.TriggerBuilder;
+import hudson.tasks.BuildStep;
 import hudson.util.XStream2;
 
 import java.io.ByteArrayInputStream;
@@ -71,6 +72,7 @@ import org.dom4j.VisitorSupport;
 import org.dom4j.io.SAXReader;
 
 import org.jenkins_ci.plugins.run_condition.RunCondition;
+import org.jenkinsci.plugins.conditionalbuildstep.singlestep.SingleConditionalBuilder;
 import org.jenkinsci.plugins.jobgenerator.actions.*;
 import org.jenkinsci.plugins.jobgenerator.parameters.*;
 
@@ -257,15 +259,6 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                 // Expand Vars
                 Visitor v = new ExpandVarsVisitor(params);
                 doc.accept(v);
-                v = new UpdateProjectReferencesVisitor(
-                              job.getUpstreamProjects(), params);
-                doc.accept(v);
-                v = new UpdateProjectReferencesVisitor(
-                            job.getDownstreamProjects(), params);
-                doc.accept(v);
-                v = new UpdateProjectReferencesVisitor(
-                            this.getSubProjects(), params);
-                doc.accept(v);
                 // Remove info specific to Job Generator
                 v = new GatherElementsToRemoveVisitor();
                 doc.accept(v);
@@ -405,36 +398,23 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                     }
                 }
             }
+
             // parameterized build trigger build step
             List<TriggerBuilder> tbl = job.getBuildersList().getAll(
                                                          TriggerBuilder.class);
-            if (tbl.size() > 0) {
-                for(TriggerBuilder tb: tbl){
-                    for (ListIterator<BlockableBuildTriggerConfig> tbc =
-                            tb.getConfigs().listIterator(); tbc.hasNext();) {
-                        BuildTriggerConfig c = tbc.next();
-                        for (AbstractProject p : c.getProjectList(
-                                                     job.getParent(),null)) {
-                            List<ParametersAction> importParams =
-                                             new ArrayList<ParametersAction>();
-                            importParams.addAll(lpa);
-                            List<AbstractBuildParameters> lbp = c.getConfigs();
-                            for(AbstractBuildParameters bp: lbp){
-                                if(bp.getClass().getSimpleName().equals(
-                                        "GeneratorKeyValueBuildParameters")){
-                                    importParams.add((ParametersAction)
-                                        bp.getAction(GeneratorRun.this,
-                                                     listener));
-                                }
-                            }
-                            job.copyOptions((JobGenerator) p);
-                            Cause.UpstreamCause cause =
-                                    new Cause.UpstreamCause(getBuild());
-                            p.scheduleBuild2(0, cause, importParams);
-                        }
-                    }
+            this.launchJobsFromTriggerBuilder(tbl, lpa);
+            // parameterized build trigger step digged into a conditional step
+            List<SingleConditionalBuilder> scbl = job.getBuildersList().getAll(
+                                               SingleConditionalBuilder.class);
+            tbl.clear();
+            for(SingleConditionalBuilder scb: scbl){
+                BuildStep bs = scb.getBuildStep();
+                if(TriggerBuilder.class.isInstance(bs)){
+                    tbl.add((TriggerBuilder)bs);
                 }
             }
+            this.launchJobsFromTriggerBuilder(tbl, lpa);
+
             // standard Jenkins dependencies
             if(bt == null){
                 for(AbstractProject dp: job.getDownstreamProjects()){
@@ -445,22 +425,36 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                 }
             }
         }
-        
-        private List<AbstractProject> getSubProjects(){
-        	List<AbstractProject> result = new ArrayList<AbstractProject>();
+
+        private void launchJobsFromTriggerBuilder(
+                List<TriggerBuilder> builders,
+                List<ParametersAction> params) throws Exception {
             JobGenerator job = getJobGenerator();
-            TriggerBuilder tb = job.getBuildersList().get(TriggerBuilder.class);
-            if (tb != null) {
+            for(TriggerBuilder tb: builders){
                 for (ListIterator<BlockableBuildTriggerConfig> tbc =
                         tb.getConfigs().listIterator(); tbc.hasNext();) {
                     BuildTriggerConfig c = tbc.next();
-                    for (AbstractProject p : c.getProjectList(job.getParent(),
-                                                              null)) {
-                    	result.add(p);
+                    for (AbstractProject p : c.getProjectList(
+                                                 job.getParent(),null)) {
+                        List<ParametersAction> importParams =
+                                         new ArrayList<ParametersAction>();
+                        importParams.addAll(params);
+                        List<AbstractBuildParameters> lbp = c.getConfigs();
+                        for(AbstractBuildParameters bp: lbp){
+                            if(bp.getClass().getSimpleName().equals(
+                                    "GeneratorKeyValueBuildParameters")){
+                                importParams.add((ParametersAction)
+                                    bp.getAction(GeneratorRun.this,
+                                                 listener));
+                            }
+                        }
+                        job.copyOptions((JobGenerator) p);
+                        Cause.UpstreamCause cause =
+                                new Cause.UpstreamCause(getBuild());
+                        p.scheduleBuild2(0, cause, importParams);
                     }
                 }
             }
-            return result;
         }
 
         private void deleteJobs(JobGenerator job, boolean deleteChildren,
@@ -584,37 +578,18 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
     class ExpandVarsVisitor extends VisitorSupport {
 
         private final List<ParametersAction> params;
-
-        public ExpandVarsVisitor(List<ParametersAction> params){
-            this.params = params;
-        }
-
-        @Override
-        public void visit(Text node){
-            node.setText(GeneratorRun.expand(node.getText(), this.params));
-        }
-    }
-
-    class UpdateProjectReferencesVisitor extends VisitorSupport {
-        private final List<JobGenerator> upordownstreamprojects;
-        private final List<ParametersAction> params;
+        private final List<JobGenerator> jobGenerators;
         private Set<Entry<Object, Object>> passedVariables = null;
 
-        public UpdateProjectReferencesVisitor(
-                List<AbstractProject> downstreamprojects,
-                List<ParametersAction> params){
-            this.upordownstreamprojects =
-                                        new ArrayList<JobGenerator>();
-            for(AbstractProject p: downstreamprojects){
-                if(JobGenerator.class.isInstance(p)){
-                    this.upordownstreamprojects.add((JobGenerator)p);
-                }
-            }
+        public ExpandVarsVisitor(List<ParametersAction> params){
+            this.jobGenerators = Jenkins.getInstance().getAllItems(
+                    JobGenerator.class);
             this.params = params;
         }
 
         @Override
         public void visit(Element node) {
+            // check for additional parameters in the case of parameterized
             String n = node.getName();
             if(n.equals("properties") &&
                node.getParent().getName().contains("org.jenkinsci.plugins." +
@@ -641,11 +616,16 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
 
         @Override
         public void visit(Text node){
+            node.setText(GeneratorRun.expand(node.getText(), this.params));
+            this.updateProjectReferences(node);
+        }
+        
+        private void updateProjectReferences(Text node){
             String expanded = "";
             for(String s: node.getText().split(",")){
                 s = Util.fixEmptyAndTrim(s);
                 if(s != null){
-                    for(JobGenerator p: this.upordownstreamprojects){
+                    for(JobGenerator p: this.jobGenerators){
                        if(s.equals(p.getName())){
                            String jexp = GeneratorRun.getExpandedJobName(p,
                                                                        params);
