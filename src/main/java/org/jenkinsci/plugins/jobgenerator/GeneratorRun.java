@@ -406,32 +406,35 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                 }
             }
             // parameterized build trigger build step
-            TriggerBuilder tb = job.getBuildersList().get(TriggerBuilder.class);
-            if (tb != null) {
-                for (ListIterator<BlockableBuildTriggerConfig> tbc =
-                        tb.getConfigs().listIterator(); tbc.hasNext();) {
-                    BuildTriggerConfig c = tbc.next();
-                    for (AbstractProject p : c.getProjectList(job.getParent(),
-                                                              null)) {
-                        List<ParametersAction> importParams =
+            List<TriggerBuilder> tbl = job.getBuildersList().getAll(
+                                                         TriggerBuilder.class);
+            if (tbl.size() > 0) {
+                for(TriggerBuilder tb: tbl){
+                    for (ListIterator<BlockableBuildTriggerConfig> tbc =
+                            tb.getConfigs().listIterator(); tbc.hasNext();) {
+                        BuildTriggerConfig c = tbc.next();
+                        for (AbstractProject p : c.getProjectList(
+                                                     job.getParent(),null)) {
+                            List<ParametersAction> importParams =
                                              new ArrayList<ParametersAction>();
-                        importParams.addAll(lpa);
-                        List<AbstractBuildParameters> lbp = c.getConfigs();
-                        for(AbstractBuildParameters bp: lbp){
-                            if(bp.getClass().getSimpleName().equals(
-                                      "GeneratorKeyValueBuildParameters")){
-                                importParams.add((ParametersAction)
-                                    bp.getAction(GeneratorRun.this, listener));
+                            importParams.addAll(lpa);
+                            List<AbstractBuildParameters> lbp = c.getConfigs();
+                            for(AbstractBuildParameters bp: lbp){
+                                if(bp.getClass().getSimpleName().equals(
+                                        "GeneratorKeyValueBuildParameters")){
+                                    importParams.add((ParametersAction)
+                                        bp.getAction(GeneratorRun.this,
+                                                     listener));
+                                }
                             }
+                            job.copyOptions((JobGenerator) p);
+                            Cause.UpstreamCause cause =
+                                    new Cause.UpstreamCause(getBuild());
+                            p.scheduleBuild2(0, cause, importParams);
                         }
-                        job.copyOptions((JobGenerator) p);
-                        Cause.UpstreamCause cause = new Cause.UpstreamCause(
-                                                                   getBuild());
-                        p.scheduleBuild2(0, cause, importParams);
                     }
                 }
             }
-            
             // standard Jenkins dependencies
             if(bt == null){
                 for(AbstractProject dp: job.getDownstreamProjects()){
