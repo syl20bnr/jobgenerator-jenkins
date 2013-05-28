@@ -7,7 +7,7 @@
   </parent>
 
   <artifactId>jobgenerator</artifactId>
-  <version>1.12-SNAPSHOT</version>
+  <version>1.13-SNAPSHOT</version>
   <packaging>hpi</packaging>
   <name>Job Generator</name>
   <description>A job generator which can replicates itself to produce a regular job. The generation can be parameterized via the standard build parameters of Jenkins by adding Generator Parameters.</description>
@@ -45,7 +45,11 @@
       <groupId>org.jenkins-ci.plugins</groupId>
       <artifactId>parameterized-trigger</artifactId>
       <version>2.17</version>
-      <optional>true</optional>
+    </dependency>
+    <dependency>
+      <groupId>org.jenkins-ci.plugins</groupId>
+      <artifactId>conditional-buildstep</artifactId>
+      <version>1.2.1</version>
     </dependency>
     <dependency>
       <groupId>org.jenkins-ci.plugins</groupId>
