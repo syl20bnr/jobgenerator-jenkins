@@ -1,7 +1,7 @@
 /*
 The MIT License
 
-Copyright (c) 2012, Sylvain Benner.
+Copyright (c) 2012-2013, Sylvain Benner.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -35,7 +35,9 @@ import hudson.model.AbstractProject;
 import hudson.model.Cause;
 import hudson.model.ParametersAction;
 import hudson.model.Run;
+import hudson.plugins.parameterizedtrigger.AbstractBuildParameterFactory;
 import hudson.plugins.parameterizedtrigger.AbstractBuildParameters;
+import hudson.plugins.parameterizedtrigger.AbstractBuildParameters.DontTriggerException;
 import hudson.plugins.parameterizedtrigger.BlockableBuildTriggerConfig;
 import hudson.plugins.parameterizedtrigger.BuildTrigger;
 import hudson.plugins.parameterizedtrigger.BuildTriggerConfig;
@@ -51,6 +53,7 @@ import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.ListIterator;
@@ -76,6 +79,9 @@ import org.jenkinsci.plugins.conditionalbuildstep.singlestep.SingleConditionalBu
 import org.jenkinsci.plugins.jobgenerator.actions.*;
 import org.jenkinsci.plugins.jobgenerator.parameters.*;
 
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
+
 /**
  * Generates a configured job by copying this job config.xml and replacing
  * generator parameters with values provided by the user at build time.
@@ -88,7 +94,22 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
     private static final Logger LOGGER = Logger.getLogger(
                                                  GeneratorRun.class.getName());
     private static final char[] specialChars = {'\\', '/', ':', '*', '"', '<',
-    	                                        '>', '|'};
+                                                '>', '|'};
+    private List<DownstreamGenerator> downstreamGenerators =
+                                         new ArrayList<DownstreamGenerator>();
+    
+    private class DownstreamGenerator{
+        private final AbstractProject job;
+        private final List<List<ParametersAction>> importParams;
+        private boolean processed;
+
+        public DownstreamGenerator(AbstractProject job,
+                List<List<ParametersAction>> params){
+           this.job = job;
+           this.importParams = params;
+           this.processed = false;
+       }
+    }
 
     public GeneratorRun(JobGenerator job, File buildDir)
             throws IOException {
@@ -142,7 +163,7 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                                             List<ParametersAction> params){
         String n = expand(p.getGeneratedJobName(), params);
         for(char c: GeneratorRun.specialChars){
-	        n = n.replace(c, '_');
+            n = n.replace(c, '_');
         }
         return n;
     }
@@ -168,7 +189,7 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
 
     public static boolean isEvaluationSupported(Element root){
         // TODO need to find a better way to detect if we can evaluate the
-        // expression for a given conditionnal class
+        // expression for a given conditional class
         List<String> notSupportedClasses = new ArrayList<String>();
         notSupportedClasses.add("AlwaysRun");
         notSupportedClasses.add("NeverRun");
@@ -220,6 +241,7 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                 return Result.FAILURE;
             }
             JobGenerator job = getJobGenerator();
+            this.gatherDownstreamGenerators(listener);
             List<ParametersAction> params = getBuild().getActions(
                                           hudson.model.ParametersAction.class);
             String expName = getExpandedJobName(job, params);
@@ -257,7 +279,7 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                     }
                 }
                 // Expand Vars
-                Visitor v = new ExpandVarsVisitor(params);
+                Visitor v = new ExpandVarsVisitor(params, downstreamGenerators);
                 doc.accept(v);
                 // Remove info specific to Job Generator
                 v = new GatherElementsToRemoveVisitor();
@@ -370,6 +392,20 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
             if(job.getProcessThisJobOnly() || job.getDelete()){
                 return;
             }
+            for(DownstreamGenerator dg: downstreamGenerators){
+                for(List<ParametersAction> lpa: dg.importParams){
+                    Cause.UpstreamCause cause = new Cause.UpstreamCause(
+                                                                   getBuild());
+                    dg.job.scheduleBuild2(0, cause, lpa);
+                    }
+            }
+        }
+
+        private void gatherDownstreamGenerators(BuildListener listener)
+                throws Exception {
+            JobGenerator job = getJobGenerator();
+            List<AbstractProject> processedProjects =
+                    new ArrayList<AbstractProject>();
             List<ParametersAction> lpa = getBuild().getActions(
                                           hudson.model.ParametersAction.class);
             // parameterized build trigger build trigger
@@ -380,21 +416,22 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                     BuildTriggerConfig c = btc.next();
                     for (AbstractProject p : c.getProjectList(job.getParent(),
                                                               null)) {
-                        List<ParametersAction> importParams =
-                                             new ArrayList<ParametersAction>();
-                        importParams.addAll(lpa);
+                        List<List<ParametersAction>> importParams =
+                                       new ArrayList<List<ParametersAction>>();
+                        importParams.add(new ArrayList<ParametersAction>());
+                        importParams.get(0).addAll(lpa);
                         List<AbstractBuildParameters> lbp = c.getConfigs();
                         for(AbstractBuildParameters bp: lbp){
                             if(bp.getClass().getSimpleName().equals(
-                                          "GeneratorKeyValueBuildParameters")){
-                                importParams.add((ParametersAction)
+                                            "PredefinedGeneratorParameters")){
+                                importParams.get(0).add((ParametersAction)
                                     bp.getAction(GeneratorRun.this, listener));
                             }
                         }
                         job.copyOptions((JobGenerator) p);
-                        Cause.UpstreamCause cause = new Cause.UpstreamCause(
-                                                                   getBuild());
-                        p.scheduleBuild2(0, cause, importParams);
+                        downstreamGenerators.add(
+                                     new DownstreamGenerator(p, importParams));
+                        processedProjects.add(p);
                     }
                 }
             }
@@ -402,7 +439,8 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
             // parameterized build trigger build step
             List<TriggerBuilder> tbl = job.getBuildersList().getAll(
                                                          TriggerBuilder.class);
-            this.launchJobsFromTriggerBuilder(tbl, lpa);
+            this.gatherDownstreamGeneratorsFromTriggerBuilder(
+                    tbl, lpa, listener);
             // parameterized build trigger step digged into a conditional step
             List<SingleConditionalBuilder> scbl = job.getBuildersList().getAll(
                                                SingleConditionalBuilder.class);
@@ -413,22 +451,27 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                     tbl.add((TriggerBuilder)bs);
                 }
             }
-            this.launchJobsFromTriggerBuilder(tbl, lpa);
+            this.gatherDownstreamGeneratorsFromTriggerBuilder(tbl, lpa,
+                                                              listener);
 
             // standard Jenkins dependencies
-            if(bt == null){
-                for(AbstractProject dp: job.getDownstreamProjects()){
-                    Cause.UpstreamCause cause = new Cause.UpstreamCause(
-                                                                   getBuild());
+            for(AbstractProject dp: job.getDownstreamProjects()){
+                if(!processedProjects.contains(dp)){
                     job.copyOptions((JobGenerator) dp);
-                    dp.scheduleBuild2(0, cause, lpa);
+                    List<List<ParametersAction>> importParams =
+                                   new ArrayList<List<ParametersAction>>();
+                    importParams.add(new ArrayList<ParametersAction>());
+                    importParams.get(0).addAll(lpa);
+                    downstreamGenerators.add(
+                                    new DownstreamGenerator(dp, importParams));
                 }
             }
         }
 
-        private void launchJobsFromTriggerBuilder(
+        private void gatherDownstreamGeneratorsFromTriggerBuilder(
                 List<TriggerBuilder> builders,
-                List<ParametersAction> params) throws Exception {
+                List<ParametersAction> params,
+                BuildListener listener) throws Exception {
             JobGenerator job = getJobGenerator();
             for(TriggerBuilder tb: builders){
                 for (ListIterator<BlockableBuildTriggerConfig> tbc =
@@ -436,24 +479,95 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                     BuildTriggerConfig c = tbc.next();
                     for (AbstractProject p : c.getProjectList(
                                                  job.getParent(),null)) {
-                        List<ParametersAction> importParams =
-                                         new ArrayList<ParametersAction>();
-                        importParams.addAll(params);
-                        List<AbstractBuildParameters> lbp = c.getConfigs();
-                        for(AbstractBuildParameters bp: lbp){
-                            if(bp.getClass().getSimpleName().equals(
-                                    "GeneratorKeyValueBuildParameters")){
-                                importParams.add((ParametersAction)
-                                    bp.getAction(GeneratorRun.this,
-                                                 listener));
+                        List<List<ParametersAction>> importParams =
+                                       new ArrayList<List<ParametersAction>>();
+                        List<List<AbstractBuildParameters>> llbpf =
+                                this.getDynamicBuildParameters(
+                                            (AbstractBuild<?, ?>)getBuild(),
+                                            listener, c.getConfigFactories());
+                        if(llbpf.size() == 0){
+                            importParams.add(new ArrayList<ParametersAction>());
+                            importParams.get(0).addAll(params);
+                            List<AbstractBuildParameters> lbp = c.getConfigs();
+                            for(AbstractBuildParameters bp: lbp){
+                                if(bp.getClass().getSimpleName().equals(
+                                            "PredefinedGeneratorParameters")){
+                                    importParams.get(0).add(
+                                        (ParametersAction)bp.getAction(
+                                                GeneratorRun.this, listener));
+                                }
+                            }
+                        }
+                        else{
+                            int importIndex = 0;
+                            for(List<AbstractBuildParameters> lbpf: llbpf){
+                                importParams.add(
+                                            new ArrayList<ParametersAction>());
+                                importParams.get(importIndex).addAll(params);
+                                for(AbstractBuildParameters bpf: lbpf){
+                                    if(bpf.getClass().getSimpleName().equals(
+                                            "PredefinedGeneratorParameters")){
+                                        importParams.get(importIndex).add(
+                                            (ParametersAction) bpf.getAction(
+                                                  GeneratorRun.this, listener));
+                                    }
+                                }
+                                importIndex += 1;
                             }
                         }
                         job.copyOptions((JobGenerator) p);
-                        Cause.UpstreamCause cause =
-                                new Cause.UpstreamCause(getBuild());
-                        p.scheduleBuild2(0, cause, importParams);
+                        downstreamGenerators.add(
+                                new DownstreamGenerator(p, importParams));
                     }
                 }
+            }
+        }
+
+
+        /**
+         * @return Inner list represents a set of build parameters used together
+         *         for one invocation of a project, and outer list represents
+         *         multiple invocations of the same project.
+         */
+        private List<List<AbstractBuildParameters>> getDynamicBuildParameters(
+                AbstractBuild<?, ?> build, BuildListener listener,
+                List<AbstractBuildParameterFactory> configFactories)
+                throws DontTriggerException, IOException, InterruptedException {
+            if (configFactories == null || configFactories.isEmpty()) {
+                return ImmutableList
+                        .<List<AbstractBuildParameters>> of(ImmutableList
+                                .<AbstractBuildParameters> of());
+            } else {
+                // this code is building the combinations of all
+                // AbstractBuildParameters reported from all factories
+                List<List<AbstractBuildParameters>> dynamicBuildParameters =
+                        Lists.newArrayList();
+                dynamicBuildParameters.add(
+                        Collections.<AbstractBuildParameters> emptyList());
+                for (AbstractBuildParameterFactory configFactory:
+                    configFactories) {
+                    List<List<AbstractBuildParameters>>
+                    newDynParameters = Lists.newArrayList();
+                    List<AbstractBuildParameters> factoryParameters =
+                            configFactory.getParameters(build, listener);
+                    // if factory returns 0 parameters we need to skip
+                    // assigning newDynParameters to dynamicBuildParameters
+                    // as we would add invalid list
+                    if (factoryParameters.size() > 0) {
+                        for (AbstractBuildParameters config:
+                            factoryParameters) {
+                            for (List<AbstractBuildParameters>
+                            dynamicBuildParameter: dynamicBuildParameters) {
+                                newDynParameters.add(ImmutableList
+                                        .<AbstractBuildParameters> builder()
+                                        .addAll(dynamicBuildParameter)
+                                        .add(config).build());
+                            }
+                        }
+                        dynamicBuildParameters = newDynParameters;
+                    }
+                }
+                return dynamicBuildParameters;
             }
         }
 
@@ -503,13 +617,13 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
             TopLevelItem i = Jenkins.getInstance().getItem(genjobn);
             if(i != null){
                 try {
-					i.delete();
-					deletedJobs.add(genjobn);
-				}
+                    i.delete();
+                    deletedJobs.add(genjobn);
+                }
                 catch (Exception e) {
-	                LOGGER.severe(String.format("Error deleting job %s",
-	                	                    	genjobn));
-				}
+                    LOGGER.severe(String.format("Error deleting job %s",
+                                                genjobn));
+                }
                 LOGGER.info(String.format("Deleted job %s", genjobn));
             }
             else{
@@ -576,39 +690,20 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
     }
 
     class ExpandVarsVisitor extends VisitorSupport {
-
         private final List<ParametersAction> params;
-        private final List<JobGenerator> jobGenerators;
-        private Set<Entry<Object, Object>> passedVariables = null;
+        private List<DownstreamGenerator> downGenerators;
 
-        public ExpandVarsVisitor(List<ParametersAction> params){
-            this.jobGenerators = Jenkins.getInstance().getAllItems(
-                    JobGenerator.class);
+        public ExpandVarsVisitor(
+                List<ParametersAction> params,
+                List<DownstreamGenerator> downGenerators){
             this.params = params;
+            this.downGenerators = downGenerators;
         }
 
         @Override
         public void visit(Element node) {
-            // check for additional parameters in the case of parameterized
             String n = node.getName();
-            if(n.equals("properties") &&
-               node.getParent().getName().contains("org.jenkinsci.plugins." +
-                                       "jobgenerator.parameterizedtrigger." +
-                                          "GeneratorKeyValueBuildParameters")){
-                // harvest variables passed by the parameterized trigger plugin
-                String t = node.getText();
-                if(t.contains("=")){
-                    Properties p = new Properties();
-                    try {
-                        p.load(new StringInputStream(t));
-                    }
-                    catch (IOException e) {
-                        return;
-                    }
-                    this.passedVariables = p.entrySet();
-                }
-            }
-            else if(n.equals("triggerWithNoParameters")){
+            if(n.equals("triggerWithNoParameters")){
                 // force trigger without any parameter
                 node.setText("true");
             }
@@ -616,40 +711,27 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
 
         @Override
         public void visit(Text node){
-            node.setText(GeneratorRun.expand(node.getText(), this.params));
-            this.updateProjectReferences(node);
+            String text = this.updateProjectReference(node);
+            node.setText(GeneratorRun.expand(text, this.params));
         }
-        
-        private void updateProjectReferences(Text node){
-            String expanded = "";
-            for(String s: node.getText().split(",")){
-                s = Util.fixEmptyAndTrim(s);
-                if(s != null){
-                    for(JobGenerator p: this.jobGenerators){
-                       if(s.equals(p.getName())){
-                           String jexp = GeneratorRun.getExpandedJobName(p,
-                                                                       params);
-                           if(this.passedVariables != null){
-                               // replace additional variables from the
-                               // parameterized trigger plugin
-                               for (Map.Entry<Object, Object> v :
-                                                        this.passedVariables) {
-                                   jexp = GeneratorRun.expand(jexp,
-                                                      v.getKey().toString(),
-                                                      v.getValue().toString());
-                               }
-                           }
-                           if(!expanded.isEmpty()){
-                               expanded += ",";
-                           }
-                           expanded += jexp;
-                       }
+
+        private String updateProjectReference(Text node){
+            String result = node.getText();
+            for(DownstreamGenerator dg: this.downGenerators){
+                if(!dg.processed && dg.job.getName().equals(node.getText())){
+                    result = "";
+                    for(List<ParametersAction> lpa: dg.importParams){
+                        if(result.length() > 0){
+                            result += ",";
+                        }
+                        result += GeneratorRun.getExpandedJobName(
+                                                    (JobGenerator)dg.job, lpa);
                     }
+                    dg.processed = true;
+                    break;
                 }
             }
-            if(!expanded.isEmpty()){
-                node.setText(expanded);
-            }
+            return result;
         }
     }
 
@@ -663,8 +745,10 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
             String n = node.getName();
             if(n.contains("GeneratorKeyValueParameterDefinition") ||
                n.contains("GeneratorChoiceParameterDefinition") ||
-               n.contains("GeneratorKeyValueBuildParameters") ||
-               n.contains("GeneratorCurrentParameters")){
+               n.contains("GeneratorCurrentParameters") ||
+               n.contains("PredefinedGeneratorParameters") ||
+               n.contains("CounterGeneratorParameterFactory") ||
+               n.contains("FileGeneratorParameterFactory")){
                 this.toRemove.add(node);
             }
         }
