@@ -1,7 +1,7 @@
 /*
 The MIT License
 
-Copyright (c) 2012, Sylvain Benner.
+Copyright (c) 2012-2013, Sylvain Benner.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

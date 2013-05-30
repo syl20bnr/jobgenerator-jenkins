@@ -1,7 +1,7 @@
 /*
 The MIT License
 
-Copyright (c) 2012, Sylvain Benner.
+Copyright (c) 2013, Sylvain Benner.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -20,7 +20,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
-*/
+ */
 
 package org.jenkinsci.plugins.jobgenerator.parameterizedtrigger;
 
@@ -41,49 +41,46 @@ import java.util.Map;
 import java.util.Properties;
 
 import org.apache.tools.ant.filters.StringInputStream;
-
+import org.jenkinsci.plugins.jobgenerator.parameters.GeneratorKeyValueParameterValue;
 import org.kohsuke.stapler.DataBoundConstructor;
 
-import org.jenkinsci.plugins.jobgenerator.parameters.*;
+public class PredefinedGeneratorParameters extends AbstractBuildParameters {
 
-/**
- * Default Generator Build Parameter which is a key value.
- * This class is an add-on to the parameterized build trigger plugin.
- * 
- * @author <a href="mailto:sylvain.benner@gmail.com">Sylvain Benner</a>
- */
-public class GeneratorKeyValueBuildParameters extends AbstractBuildParameters {
+	private final String properties;
 
-    private final String properties;
+	@DataBoundConstructor
+	public PredefinedGeneratorParameters(String properties) {
+		this.properties = properties;
+	}
 
-    @DataBoundConstructor
-    public GeneratorKeyValueBuildParameters(String properties) {
-        this.properties = properties;
-    }
+	public Action getAction(AbstractBuild<?, ?> build, TaskListener listener)
+	        throws IOException, InterruptedException {
 
-    public Action getAction(AbstractBuild<?, ?> build, TaskListener listener)
-            throws IOException, InterruptedException {
-        EnvVars env = build.getEnvironment(listener);
-        Properties p = new Properties();
-        p.load(new StringInputStream(properties));
-        List<ParameterValue> values = new ArrayList<ParameterValue>();
-        for (Map.Entry<Object, Object> entry : p.entrySet()) {
-            values.add(new GeneratorKeyValueParameterValue(entry.getKey()
-                    .toString(), env.expand(entry.getValue().toString())));
-        }
-        return new ParametersAction(values);
-    }
+		EnvVars env = getEnvironment(build, listener);
 
-    public String getProperties() {
-        return properties;
-    }
+		Properties p = new Properties();
+		p.load(new StringInputStream(properties));
 
-    @Extension(optional = true)
-    public static class DescriptorImpl extends
-            Descriptor<AbstractBuildParameters> {
-        @Override
-        public String getDisplayName() {
-            return "Generator parameters";
-        }
-    }
+		List<ParameterValue> values = new ArrayList<ParameterValue>();
+		for (Map.Entry<Object, Object> entry : p.entrySet()) {
+			values.add(new GeneratorKeyValueParameterValue(entry.getKey()
+			        .toString(), env.expand(entry.getValue().toString())));
+		}
+
+		return new ParametersAction(values);
+	}
+
+	public String getProperties() {
+		return properties;
+	}
+
+	@Extension
+	public static class DescriptorImpl extends
+	        Descriptor<AbstractBuildParameters> {
+		@Override
+		public String getDisplayName() {
+			return "Predefined Generator parameters";
+		}
+	}
+
 }
