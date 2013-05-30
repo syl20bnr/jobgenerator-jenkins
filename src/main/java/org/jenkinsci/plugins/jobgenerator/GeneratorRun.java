@@ -716,22 +716,31 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
         }
 
         private String updateProjectReference(Text node){
-            String result = node.getText();
-            for(DownstreamGenerator dg: this.downGenerators){
-                if(!dg.processed && dg.job.getName().equals(node.getText())){
-                    result = "";
-                    for(List<ParametersAction> lpa: dg.importParams){
-                        if(result.length() > 0){
-                            result += ",";
-                        }
-                        result += GeneratorRun.getExpandedJobName(
+            String result = "";
+            for(String s: node.getText().split(",")){
+                s = Util.fixEmptyAndTrim(s);
+                if(s != null){
+                    for(DownstreamGenerator dg: this.downGenerators){
+                        if(!dg.processed && dg.job.getName().equals(s)){
+                            for(List<ParametersAction> lpa: dg.importParams){
+                                if(result.length() > 0){
+                                    result += ",";
+                                }
+                                result += GeneratorRun.getExpandedJobName(
                                                     (JobGenerator)dg.job, lpa);
+                            }
+                            dg.processed = true;
+                            break;
+                        }
                     }
-                    dg.processed = true;
-                    break;
                 }
             }
-            return result;
+            if(result.length() > 0){
+                return result;
+            }
+            else{
+                return node.getText();
+            }
         }
     }
 
