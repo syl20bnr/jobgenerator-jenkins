@@ -279,7 +279,8 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                     }
                 }
                 // Expand Vars
-                Visitor v = new ExpandVarsVisitor(params, downstreamGenerators);
+                Visitor v = new ExpandVarsVisitor(
+                        params, downstreamGenerators, job.getDisableJobs());
                 doc.accept(v);
                 // Remove info specific to Job Generator
                 v = new GatherElementsToRemoveVisitor();
@@ -691,13 +692,16 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
 
     class ExpandVarsVisitor extends VisitorSupport {
         private final List<ParametersAction> params;
+        private final boolean disableJob;
         private List<DownstreamGenerator> downGenerators;
 
         public ExpandVarsVisitor(
                 List<ParametersAction> params,
-                List<DownstreamGenerator> downGenerators){
+                List<DownstreamGenerator> downGenerators,
+                boolean disableJob){
             this.params = params;
             this.downGenerators = downGenerators;
+            this.disableJob = disableJob;
         }
 
         @Override
@@ -706,6 +710,15 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
             if(n.equals("triggerWithNoParameters")){
                 // force trigger without any parameter
                 node.setText("true");
+            }
+            else if(n.equals("disabled") &&
+                    node.getParent().getName().equals("project")){
+                if(this.disableJob){
+                    node.setText("true");
+                }
+                else{
+                    node.setText("false");
+                }
             }
         }
 
@@ -716,22 +729,31 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
         }
 
         private String updateProjectReference(Text node){
-            String result = node.getText();
-            for(DownstreamGenerator dg: this.downGenerators){
-                if(!dg.processed && dg.job.getName().equals(node.getText())){
-                    result = "";
-                    for(List<ParametersAction> lpa: dg.importParams){
-                        if(result.length() > 0){
-                            result += ",";
-                        }
-                        result += GeneratorRun.getExpandedJobName(
+            String result = "";
+            for(String s: node.getText().split(",")){
+                s = Util.fixEmptyAndTrim(s);
+                if(s != null){
+                    for(DownstreamGenerator dg: this.downGenerators){
+                        if(!dg.processed && dg.job.getName().equals(s)){
+                            for(List<ParametersAction> lpa: dg.importParams){
+                                if(result.length() > 0){
+                                    result += ",";
+                                }
+                                result += GeneratorRun.getExpandedJobName(
                                                     (JobGenerator)dg.job, lpa);
+                            }
+                            dg.processed = true;
+                            break;
+                        }
                     }
-                    dg.processed = true;
-                    break;
                 }
             }
-            return result;
+            if(result.length() > 0){
+                return result;
+            }
+            else{
+                return node.getText();
+            }
         }
     }
 
