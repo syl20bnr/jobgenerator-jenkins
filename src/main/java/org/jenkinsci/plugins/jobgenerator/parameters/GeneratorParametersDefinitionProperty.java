@@ -135,12 +135,14 @@ public class GeneratorParametersDefinitionProperty
                 }
             }
             JobGenerator p = (JobGenerator)this.getOwner();
-            JSONObject o = json.getJSONObject("delete");
             p.setDelete(false);
+            JSONObject o = json.getJSONObject("delete");
             if(!o.isNullObject()){
                 p.setDelete(o.getBoolean("confirm"));
             }
-            o = json.getJSONObject("processThisJobOnly");
+            o = json.getJSONObject("disablejobs");
+            p.setDisableJobs(!o.isNullObject());
+            o = json.getJSONObject("processthisjob");
             p.setProcessThisJobOnly(!o.isNullObject());
         }
         super._doBuild(req, rsp, new TimeDuration(0));

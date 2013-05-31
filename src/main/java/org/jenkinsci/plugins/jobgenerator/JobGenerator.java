@@ -68,6 +68,7 @@ public class JobGenerator extends Project<JobGenerator, GeneratorRun>
 
     private transient boolean delete = false;
     private transient boolean processThisJobOnly = false;
+    private transient boolean disableJobs = false;
     private transient boolean initiator = false;
     private transient String customWorkspace = null;
     private String generatedJobName = "";
@@ -190,13 +191,13 @@ public class JobGenerator extends Project<JobGenerator, GeneratorRun>
                 k = "generatedJobName";
                 if(o.has(k)){ this.generatedJobName = o.getString(k); }
                 k = "generatedDisplayJobName";
-                if(o.has(k)){ this.generatedDisplayJobName = o.getString(k); }            
+                if(o.has(k)){ this.generatedDisplayJobName = o.getString(k); }
             }
         }
         
         if(req.hasParameter("customWorkspace")) {
             customWorkspace = Util.fixEmptyAndTrim(req.getParameter(
-            		                             "customWorkspace.directory"));
+                                                 "customWorkspace.directory"));
         } else {
             customWorkspace = null;
         }
@@ -270,6 +271,12 @@ public class JobGenerator extends Project<JobGenerator, GeneratorRun>
     public void setProcessThisJobOnly(boolean check){
         this.processThisJobOnly = check;
     }
+    public boolean getDisableJobs(){
+        return this.disableJobs;
+    }
+    public void setDisableJobs(boolean check){
+        this.disableJobs = check;
+    }
     public boolean getDelete(){
         return this.delete;
     }
@@ -280,6 +287,7 @@ public class JobGenerator extends Project<JobGenerator, GeneratorRun>
     public void copyOptions(JobGenerator p){
         p.setDelete(this.getDelete());
         p.setProcessThisJobOnly(this.getProcessThisJobOnly());
+        p.setDisableJobs(this.getDisableJobs());
     }
 
     public static class JobGeneratorDescriptor
@@ -306,12 +314,12 @@ public class JobGenerator extends Project<JobGenerator, GeneratorRun>
         }
  
         public FormValidation doCheckCustomWorkspace(
-        		@QueryParameter(value="customWorkspace.directory") String customWorkspace){
-        	if(Util.fixEmptyAndTrim(customWorkspace)==null)
-        		return FormValidation.error(
-        				      Messages.JobGenerator_CustomWorkspaceEmpty());
-        	else
-        		return FormValidation.ok();
+                @QueryParameter(value="customWorkspace.directory") String customWorkspace){
+            if(Util.fixEmptyAndTrim(customWorkspace)==null)
+                return FormValidation.error(
+                              Messages.JobGenerator_CustomWorkspaceEmpty());
+            else
+                return FormValidation.ok();
         }
 
         public String getDefaultEntriesPage(){
