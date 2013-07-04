@@ -429,7 +429,9 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                                     bp.getAction(GeneratorRun.this, listener));
                             }
                         }
-                        job.copyOptions((JobGenerator) p);
+                        if (JobGenerator.class.isInstance(p)){
+                            job.copyOptions((JobGenerator) p);
+                        }
                         downstreamGenerators.add(
                                      new DownstreamGenerator(p, importParams));
                         processedProjects.add(p);
@@ -458,7 +460,9 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
             // standard Jenkins dependencies
             for(AbstractProject dp: job.getDownstreamProjects()){
                 if(!processedProjects.contains(dp)){
-                    job.copyOptions((JobGenerator) dp);
+                    if (JobGenerator.class.isInstance(dp)){
+                        job.copyOptions((JobGenerator) dp);
+                    }
                     List<List<ParametersAction>> importParams =
                                    new ArrayList<List<ParametersAction>>();
                     importParams.add(new ArrayList<ParametersAction>());
@@ -516,7 +520,9 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                                 importIndex += 1;
                             }
                         }
-                        job.copyOptions((JobGenerator) p);
+                        if (JobGenerator.class.isInstance(p)){
+                            job.copyOptions((JobGenerator) p);
+                        }
                         downstreamGenerators.add(
                                 new DownstreamGenerator(p, importParams));
                     }
@@ -739,8 +745,13 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                                 if(result.length() > 0){
                                     result += ",";
                                 }
-                                result += GeneratorRun.getExpandedJobName(
+                                if (JobGenerator.class.isInstance(dg.job)){
+                                    result += GeneratorRun.getExpandedJobName(
                                                     (JobGenerator)dg.job, lpa);
+                                }
+                                else {
+                                    result += dg.job.getName();
+                                }
                             }
                             dg.processed = true;
                             break;
