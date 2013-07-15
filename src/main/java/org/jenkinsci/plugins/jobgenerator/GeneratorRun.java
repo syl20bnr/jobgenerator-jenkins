@@ -431,10 +431,10 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                         }
                         if (JobGenerator.class.isInstance(p)){
                             job.copyOptions((JobGenerator) p);
+                            downstreamGenerators.add(
+                                         new DownstreamGenerator(p, importParams));
+                            processedProjects.add(p);
                         }
-                        downstreamGenerators.add(
-                                     new DownstreamGenerator(p, importParams));
-                        processedProjects.add(p);
                     }
                 }
             }
@@ -462,13 +462,13 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                 if(!processedProjects.contains(dp)){
                     if (JobGenerator.class.isInstance(dp)){
                         job.copyOptions((JobGenerator) dp);
+                        List<List<ParametersAction>> importParams =
+                                       new ArrayList<List<ParametersAction>>();
+                        importParams.add(new ArrayList<ParametersAction>());
+                        importParams.get(0).addAll(lpa);
+                        downstreamGenerators.add(
+                                        new DownstreamGenerator(dp, importParams));
                     }
-                    List<List<ParametersAction>> importParams =
-                                   new ArrayList<List<ParametersAction>>();
-                    importParams.add(new ArrayList<ParametersAction>());
-                    importParams.get(0).addAll(lpa);
-                    downstreamGenerators.add(
-                                    new DownstreamGenerator(dp, importParams));
                 }
             }
         }
@@ -522,9 +522,9 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                         }
                         if (JobGenerator.class.isInstance(p)){
                             job.copyOptions((JobGenerator) p);
+                            downstreamGenerators.add(
+                                    new DownstreamGenerator(p, importParams));
                         }
-                        downstreamGenerators.add(
-                                new DownstreamGenerator(p, importParams));
                     }
                 }
             }
