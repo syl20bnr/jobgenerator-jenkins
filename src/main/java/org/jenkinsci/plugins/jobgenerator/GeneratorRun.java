@@ -192,6 +192,7 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
         // expression for a given conditional class
         List<String> notSupportedClasses = new ArrayList<String>();
         notSupportedClasses.add("AlwaysRun");
+        notSupportedClasses.add("BooleanCondition");
         notSupportedClasses.add("NeverRun");
         notSupportedClasses.add("CauseCondition");
         notSupportedClasses.add("StatusCondition");
