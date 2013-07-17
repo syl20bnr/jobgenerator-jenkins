@@ -188,7 +188,7 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
         else if (r == ReplaceType.REG_EXP){
             // fetch regexps and expression to replace in s
             Pattern pattern = Pattern.compile(
-                    ".*?\\$\\{" + n + "/(.*?)/(.*?)\\}.*");
+                    ".*?\\$\\{" + n + "/(.+?)/(.*?)\\}.*");
             Matcher regexps = pattern.matcher(s);
             if (regexps.find()){
                 pattern = Pattern.compile(
