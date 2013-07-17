@@ -62,6 +62,8 @@ import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.Set;
 import java.util.logging.Logger;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import jenkins.model.Jenkins;
 
@@ -97,6 +99,10 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                                                 '>', '|'};
     private List<DownstreamGenerator> downstreamGenerators =
                                          new ArrayList<DownstreamGenerator>();
+    private enum ReplaceType{
+        NORMAL, SPECIAL_CHARS, REG_EXP;
+    }
+    private static final ReplaceType[] replaceTypes = ReplaceType.values();
     
     private class DownstreamGenerator{
         private final AbstractProject job;
@@ -126,35 +132,79 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
 
     public static String expand(String s, List<ParametersAction> params) {
         // check existenz of variables to replace
-        boolean proceed = false;
         for (ParametersAction p : params) {
             List<ParameterValue> values = p.getParameters();
+            ParameterValue value = null;
+            ReplaceType replType = ReplaceType.NORMAL;
             for (ParameterValue v : values) {
                 String decorated = "${" + v.getName() + "}";
                 if (s.contains(decorated)) {
-                    proceed = true;
+                    value = v;
+                    break;
+                }
+                decorated =  "${" + v.getName() + "*}";
+                if (s.contains(decorated)) {
+                    replType = ReplaceType.SPECIAL_CHARS;
+                    value = v;
+                    break;
+                }
+                Pattern pattern = Pattern.compile(
+                        ".*?\\$\\{" + v.getName() + "/(.*?)/(.*?)\\}.*");
+                Matcher matcher = pattern.matcher(s);
+                if (matcher.find()) {
+                    replType = ReplaceType.REG_EXP;
+                    value = v;
                     break;
                 }
             }
-        }
-        if (proceed){
-            for (ParametersAction p : params) {
-                List<ParameterValue> values = p.getParameters();
-                for (ParameterValue v : values) {
-                    s = GeneratorRun.expand(s, v.getName(),
-                                  ((GeneratorKeyValueParameterValue) v).value);
-                }
+            if (value != null){
+                s = GeneratorRun.expand(
+                        s, value.getName(),
+                        ((GeneratorKeyValueParameterValue) value).value,
+                        replType);
+                // replace nested variables
+                s = expand(s, params);
             }
-            // replace nested variables
-            s = expand(s, params);
         }
         return s;
     }
 
-    private static String expand(String s, String n, String v){
-        String decorated = "${" + n + "}";
-        while (s.contains(decorated)) {
-            s = s.replace(decorated, v);
+    private static String expand(String s, String n, String v, ReplaceType r){
+        if(r == ReplaceType.NORMAL) {
+            String decorated = "${" + n + "}";
+            while (s.contains(decorated)) {
+                s = s.replace(decorated, v);
+            }
+        }
+        else if(r == ReplaceType.SPECIAL_CHARS) {
+            for(char c: GeneratorRun.specialChars){
+                v = v.replace(c, '_');
+            }
+            String decorated = "${" + n + "*}";
+            while (s.contains(decorated)) {
+                s = s.replace(decorated, v);
+            }
+        }
+        else if (r == ReplaceType.REG_EXP){
+            // fetch regexps and expression to replace in s
+            Pattern pattern = Pattern.compile(
+                    ".*?\\$\\{" + n + "/(.*?)/(.*?)\\}.*");
+            Matcher regexps = pattern.matcher(s);
+            if (regexps.find()){
+                pattern = Pattern.compile(
+                        ".*?(\\$\\{" + n + "/.*?/.*?\\}).*");
+                Matcher toReplace = pattern.matcher(s);
+                if (toReplace.find()) {
+                    // apply regexp replacement to value v 
+                    pattern = Pattern.compile(regexps.group(1));
+                    Matcher vmatcher = pattern.matcher(v);
+                    if (vmatcher.find()) {
+                        v = vmatcher.replaceAll(regexps.group(2));
+                    }
+                    // finally replace the whole expression by the new value
+                    s = s.replace(toReplace.group(1), v);
+                }
+            }
         }
         return s;
     }
@@ -162,6 +212,7 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
     public static String getExpandedJobName(JobGenerator p,
                                             List<ParametersAction> params){
         String n = expand(p.getGeneratedJobName(), params);
+        // force replacement of special characters
         for(char c: GeneratorRun.specialChars){
             n = n.replace(c, '_');
         }
