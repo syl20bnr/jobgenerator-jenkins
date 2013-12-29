@@ -81,9 +81,12 @@ THE SOFTWARE.
           </f:optionalBlock>
         </f:section>
         <f:block>
-           <table height="10" />
+          <table height="10" />
         </f:block>
         <f:block>
+          <!-- Changes, similar to https://issues.jenkins-ci.org/browse/JENKINS-18425 -->
+          <input type="hidden" name="statusCode" value="303" />
+          <input type="hidden" name="redirectTo" value="." />
           <f:submit value="${%Generate}" />
         </f:block>
       </f:form>
