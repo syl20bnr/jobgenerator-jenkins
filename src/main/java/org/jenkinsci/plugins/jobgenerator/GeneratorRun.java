@@ -31,6 +31,7 @@ import hudson.model.ParameterValue;
 import hudson.model.Result;
 import hudson.model.TopLevelItem;
 import hudson.model.AbstractBuild;
+import hudson.model.AbstractItem;
 import hudson.model.AbstractProject;
 import hudson.model.Cause;
 import hudson.model.ParametersAction;
@@ -64,6 +65,8 @@ import java.util.Set;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import javax.xml.transform.stream.StreamSource;
 
 import jenkins.model.Jenkins;
 
@@ -412,19 +415,22 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                 InputStream is = new ByteArrayInputStream(
                                                 doc.asXML().getBytes("UTF-8"));
 //                System.out.println(doc.asXML());
-                boolean created =
-                    Jenkins.getInstance().getItem(expName) == null;
-                if(created){
-                    LOGGER.info(String.format("Created job %s", expName));
-                }
-                else{
+                AbstractItem item = 
+                        (AbstractItem) Jenkins.getInstance().getItem(expName);
+                if(item != null){
+                    StreamSource ss = new StreamSource(is);
+                    item.updateByXml(ss);
                     LOGGER.info(String.format("Updated configuration of " +
                                               "job %s", expName));
                 }
-                Jenkins.getInstance().createProjectFromXML(expName, is);
+                else{
+                    Jenkins.getInstance().createProjectFromXML(expName, is);
+                    LOGGER.info(String.format("Created job %s", expName));
+                }
                 // save generated job name
                 GeneratedJobBuildAction action =
-                                 new GeneratedJobBuildAction(expName, created);
+                              new GeneratedJobBuildAction(expName, item!=null);
+                getBuild().addAction(action);
                 getBuild().addAction(action);
             }
             return Result.SUCCESS;
