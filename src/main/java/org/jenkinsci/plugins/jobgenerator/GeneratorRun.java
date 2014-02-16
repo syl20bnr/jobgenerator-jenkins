@@ -291,7 +291,7 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
 
         protected Result doRun(BuildListener listener) throws Exception {
             // TODO syl20bnr: This function is a big mess. I plan to
-            // refactoring it when it comes to add some tests.
+            // refactor it for testing purpose.
             if(!this.checkParameters(listener)){
                 return Result.FAILURE;
             }
@@ -348,6 +348,7 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                                   "hudson.model.ParametersDefinitionProperty");
                 this.removeNodeIfNoChild(doc, "generatedJobName");
                 this.removeNodeIfNoChild(doc, "generatedDisplayJobName");
+                this.removeNodeIfNoChild(doc, "autoRunJob");
                 // Evaluate builders (Single step)
                 List vroots = doc.selectNodes("//org.jenkinsci.plugins." +
                    "conditionalbuildstep.singlestep.SingleConditionalBuilder");
@@ -415,8 +416,8 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                 InputStream is = new ByteArrayInputStream(
                                                 doc.asXML().getBytes("UTF-8"));
 //                System.out.println(doc.asXML());
-                AbstractItem item = 
-                        (AbstractItem) Jenkins.getInstance().getItem(expName);
+                AbstractProject item = 
+                        (AbstractProject) Jenkins.getInstance().getItem(expName);
                 if(item != null){
                     StreamSource ss = new StreamSource(is);
                     item.updateByXml(ss);
@@ -424,14 +425,20 @@ public class GeneratorRun extends Build<JobGenerator, GeneratorRun> {
                                               "job %s", expName));
                 }
                 else{
-                    Jenkins.getInstance().createProjectFromXML(expName, is);
+                    item = (AbstractProject)
+                            Jenkins.getInstance().createProjectFromXML(
+                                                                  expName, is);
                     LOGGER.info(String.format("Created job %s", expName));
                 }
                 // save generated job name
                 GeneratedJobBuildAction action =
                               new GeneratedJobBuildAction(expName, item!=null);
                 getBuild().addAction(action);
-                getBuild().addAction(action);
+                // auto run the job
+                if(job.getAutoRunJob()){
+                    Cause.UserIdCause cause = new Cause.UserIdCause();
+                    item.scheduleBuild(5, cause);
+                }
             }
             return Result.SUCCESS;
         }

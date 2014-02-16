@@ -22,22 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 -->
 
-<?jelly escape-by-default='true'?>
-<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler"
-         xmlns:p="/lib/hudson/project" xmlns:d="jelly:define"
-         xmlns:l="/lib/layout" xmlns:t="/lib/hudson"
-         xmlns:f="/lib/form" xmlns:i="jelly:fmt">
-  <st:include page="${it.descriptor.defaultEntriesPage}" />
-  <f:section name="plugin-jobgenerator-GeneratedJobConfig"
-             title="${%Generated Job Additional Configuration}">
-    <f:entry title="${%Generated Job Name}" field="generatedJobName">
-      <f:textbox />
-    </f:entry>
-    <f:entry title="${%Generated Job Display Name}" field="generatedDisplayJobName">
-      <f:textbox />
-    </f:entry>
-    <f:entry title="${%Automatically run the generated job}" field="autoRunJob">
-        <f:checkbox />
-    </f:entry>
-  </f:section>
-</j:jelly>
+<div>
+  If checked, the generated job will be automatically run when the generation
+  is complete.
+</div>

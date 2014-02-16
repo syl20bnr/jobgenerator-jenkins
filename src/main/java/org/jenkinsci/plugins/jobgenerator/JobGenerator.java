@@ -73,6 +73,7 @@ public class JobGenerator extends Project<JobGenerator, GeneratorRun>
     private transient String customWorkspace = null;
     private String generatedJobName = "";
     private String generatedDisplayJobName = "";
+    private boolean autoRunJob = false;
 
     @DataBoundConstructor
     public JobGenerator(ItemGroup parent, String name) {
@@ -185,13 +186,15 @@ public class JobGenerator extends Project<JobGenerator, GeneratorRun>
         String k = "plugin-jobgenerator-GeneratedJobConfig";
         JSONObject o;
         
-        if(json.has(k)){        
+        if(json.has(k)){
             o = json.getJSONObject(k);
             if(o != null) {
                 k = "generatedJobName";
                 if(o.has(k)){ this.generatedJobName = o.getString(k); }
                 k = "generatedDisplayJobName";
                 if(o.has(k)){ this.generatedDisplayJobName = o.getString(k); }
+                k = "autoRunJob";
+                if(o.has(k)){ this.autoRunJob = o.getBoolean(k);}
             }
         }
         
@@ -255,6 +258,13 @@ public class JobGenerator extends Project<JobGenerator, GeneratorRun>
     }
     public void setGeneratedDisplayJobName(String name){
         this.generatedDisplayJobName = name;
+    }
+
+    public boolean getAutoRunJob(){
+        return this.autoRunJob;
+    }
+    public void setAutoRunJob(boolean value){
+        this.autoRunJob = value;
     }
 
     public String getCustomWorkspace() {
